@@ -1,0 +1,7 @@
+#+OPTIONS: \n:t
+#+TITLE: Personal Site
+#+LANGUAGE: en
+#+AUTHOR: Ivan Nikolic
+#+DATE: [2024-12-02 Mon]
+#+LAST_MODIFIED: [2024-12-18 Wed]
+#+VERSION: v0.1 alpha
