@@ -11,19 +11,25 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, user-scalable=yes"
     />
-        <meta name="author" content="Ivan Nikolic" />
-           <title>Personal Site</title>
-        <link rel="stylesheet" href="reset.css" />
-        <link rel="stylesheet" href="index.css" />
+           <title>Ivan Nikolic</title>
+        <link rel="stylesheet" href="/reset.css" />
+        <link rel="stylesheet" href="/index.css" />
       
   </head>
   <body>
     
     <table class="header">
       <tr>
+        <td
+          class="banner-cell"
+          colspan="4"
+          style="background-image: url(&quot;img/bg.jpg&quot;)"
+        ></td>
+      </tr>
+      <tr>
         <td colspan="2" rowspan="2" class="width-auto">
-          <h1 class="title">Personal Site</h1>
-          <span class="subtitle"></span>
+          <h1 class="title">Ivan Nikolic</h1>
+          <span class="subtitle">Personal site</span>
         </td>
         <th>Version</th>
         <td class="width-min">v0.1 alpha</td>
@@ -37,7 +43,7 @@
       <tr>
         <th class="width-min">Author</th>
         <td class="width-auto">
-          <a href=""><cite>Ivan Nikolic</cite></a>
+          <a href=""><cite></cite></a>
         </td>
         <th class="width-min">Updated</th>
         <td>[2024-12-02 Mon]</td>
@@ -46,8 +52,52 @@
     <label class="debug-toggle-label"
       ><input type="checkbox" class="debug-toggle" /> Debug mode</label
     >
-       
+         <nav id="TOC" role="doc-toc">
+            <h2 id="toctitle">Contents</h2>
+
+       <ul class="incremental">
+<li><a href="#intro" id="toc-intro">Intro</a></li>
+<li><a href="#projects" id="toc-projects">Projects</a>
+<ul class="incremental">
+<li><a href="#watering" id="toc-watering">Watering</a></li>
+<li><a href="#drone-mapping-3d-reconstruction"
+id="toc-drone-mapping-3d-reconstruction">Drone mapping, 3D
+reconstruction</a></li>
+<li><a href="#livecoding-av-experiments"
+id="toc-livecoding-av-experiments">Livecoding A/V experiments</a></li>
+<li><a href="#evehicle" id="toc-evehicle">evehicle</a></li>
+</ul></li>
+</ul>
+    </nav>
+     <section id="intro" class="level1">
+<h1>Intro</h1>
+</section>
+<section id="projects" class="level1">
+<h1>Projects</h1>
+<section id="watering" class="level2">
+<h2>Watering</h2>
+<p><a href="watering/"><img
+src="./watering/img/watering.webp" /></a></p>
+<p>indoors watering system, distributed sensor networks, data
+collection</p>
+</section>
+<section id="drone-mapping-3d-reconstruction" class="level2">
+<h2>Drone mapping, 3D reconstruction</h2>
+<p><a href="sunsim/"><img src="./sunsim/img/bg.jpg" /></a></p>
+<p>architecture, gis, 3d modeling, sattelite data</p>
+</section>
+<section id="livecoding-av-experiments" class="level2">
+<h2>Livecoding A/V experiments</h2>
+<p><a href="visuals/"><img src="./visuals/img/s3d.jpg" /></a></p>
+<p>web, shaders, supercollider, midi</p>
+</section>
+<section id="evehicle" class="level2">
+<h2>evehicle</h2>
+<p><img src="./evehicle/evehicle.jpg" /></p>
+<p>battery construction, cnc</p>
+</section>
+</section> 
     <div class="debug-grid"></div>
-    <script src="index.js"></script>
+    <script src="/index.js"></script>
   </body>
 </html>

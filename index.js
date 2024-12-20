@@ -159,6 +159,7 @@ function checkOffsets() {
     "TH",
   ]);
   const cell = gridCellDimensions();
+
   const elements = document.querySelectorAll(
     "body :not(.debug-grid, .debug-toggle)",
   );

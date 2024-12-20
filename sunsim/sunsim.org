@@ -73,7 +73,6 @@ I'm interested in a high resolution image of the land with low resolution mounta
 
 I had to write some code to read the tiff coordinates and correctly translate those to opengl transformations so that I can import multiple tiffs and overlay them.
 
-[[./img/three_fullsim.png]]
 
 [[./img/sun_global.png]]
 

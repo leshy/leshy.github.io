@@ -234,6 +234,17 @@ sub {
   font-size: 0.75rem;
 }
 
+.bg {
+  border: var(--border-thickness) solid var(--text-color);
+}
+
+.banner-cell {
+  background-size: 100% auto;
+  background-position: center;
+  background-repeat: no-repeat;
+  height: 20ch;
+}
+
 table {
   position: relative;
   top: calc(var(--line-height) / 2);
