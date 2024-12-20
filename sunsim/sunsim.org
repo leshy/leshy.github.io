@@ -10,6 +10,8 @@
 I'm building a house, which introduced me to gis and drone mapping so roughly documenting my process here.
 Goal of this has been get a 3d model of the land allowing for sunlight coverage simulation for architecture and solar panel placement.
 
+The below runs in browser, for some reason works great on mobile
+
 [[https://lsh.red/sunsim/][./img/three_double.png]]
 
 A bunch of geotagged photos from the air can be stitched together into a map. With higher frequency of photos 3d reconstruction of the terrain is possible. I'm working with around 100 photographs taken from 200 meters away of roughly 40.000 square meters of land.
@@ -62,8 +64,6 @@ Data comes in some kind of sentinel2 jp2 format. You can convert this to tiff us
 apt-get install gdal-bin
 gdal_translate T34SGH_A040516_20230326T091116_B01.jp2 elevation.tif
 #+end_src
-
-https://dataspace.copernicus.eu/explore-data
 
 [[./img/map_sentinel2.png]]
 

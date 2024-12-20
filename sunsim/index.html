@@ -76,6 +76,7 @@ id="toc-merging-meshes-final-sim">Merging meshes, final sim</a></li>
 roughly documenting my process here.<br />
 Goal of this has been get a 3d model of the land allowing for sunlight
 coverage simulation for architecture and solar panel placement.</p>
+<p>The below runs in browser, for some reason works great on mobile</p>
 <p><a href="https://lsh.red/sunsim/"><img
 src="./img/three_double.png" /></a></p>
 <p>A bunch of geotagged photos from the air can be stitched together
@@ -144,8 +145,6 @@ to tiff using <a href="https://gdal.org/">gdal</a></p>
 <details><summary> bash code block</summary><code><div class="sourceCode" id="cb1" data-org-language="sh"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">apt-get</span> install gdal-bin</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">gdal_translate</span> T34SGH_A040516_20230326T091116_B01.jp2 elevation.tif</span></code></pre></div></code></details>
-<p><a
-href="https://dataspace.copernicus.eu/explore-data">https://dataspace.copernicus.eu/explore-data</a></p>
 <p><img src="./img/map_sentinel2.png" /></p>
 </section>
 <section id="merging-meshes-final-sim" class="level2">
@@ -162,6 +161,6 @@ tiffs and overlay them.</p>
 </section>
 </section> 
     <div class="debug-grid"></div>
-    <script src="index.js"></script>
+    <script src="/index.js"></script>
   </body>
 </html>
