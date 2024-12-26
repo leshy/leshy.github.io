@@ -4,7 +4,7 @@ a:has(> img) {
 }
 
 a:has(> img)::before {
-  content: "RUN";
+  content: "OPEN";
   position: absolute;
   top: 50%;
   left: 50%;
@@ -76,30 +76,6 @@ a:hover:has(> img)::before {
     url("fonts/jetbrains/JetBrainsMonoExtraBoldItalic.woff") format("woff");
 }
 
-:root,
-svg {
-  --font-family: "JetBrains Mono", monospace;
-  --line-height: 1.2rem;
-  --border-thickness: 2px;
-  --text-color: #fff;
-  --text-color-alt: #aaa;
-  --text-color-p: #ccc;
-  --background-color: #000;
-  --background-color-alt: #111;
-
-  --font-weight-normal: 500;
-  --font-weight-medium: 600;
-  --font-weight-bold: 800;
-
-  fill: var(--text-color);
-  font-family: var(--font-family);
-  font-optical-sizing: auto;
-  font-weight: var(--font-weight-normal);
-  font-style: normal;
-  font-variant-numeric: tabular-nums lining-nums;
-  font-size: 16px;
-}
-
 @media (prefers-color-scheme: light) {
   :root {
     --text-color: #000;
@@ -116,6 +92,32 @@ svg {
   img[src*="schematic-"] {
     filter: invert(100%);
   }
+}
+
+:root,
+svg {
+  --text-color: #fff;
+  --text-color-alt: #aaa;
+  --text-color-p: #ccc;
+  --background-color: #000;
+  --background-color-alt: #111;
+
+  --font-family: "JetBrains Mono", monospace;
+  --line-height: 1.2rem;
+  --border-thickness: 2px;
+
+  --font-weight-normal: 500;
+  --font-weight-medium: 600;
+  --font-weight-bold: 800;
+
+  fill: var(--text-color);
+  font-family: var(--font-family);
+  font-optical-sizing: auto;
+  font-weight: var(--font-weight-normal);
+  font-style: normal;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-size: 16px;
+  width: 100%;
 }
 
 * {
@@ -181,6 +183,9 @@ h1 {
 }
 
 h2 {
+  color: #ffa500;
+  /* color: var(--background-color); */
+  /* background: var(--text-color); */
   font-size: 1rem;
   text-transform: uppercase;
 }
@@ -662,30 +667,10 @@ code span.wa {
   font-style: italic;
 } /* Warning */
 
-/* /\* Make level1 flex container when it has multiple level2 children *\/ */
-/* section.level1:has(> section.level2 ~ section.level2) { */
-/*   display: flex; */
-/*   flex-wrap: wrap; */
-/*   column-gap: var(--line-height); */
-/* } */
-
-/* /\* Keep non-section content full width *\/ */
-/* section.level1 > :not(section) { */
-/*   width: 100%; */
-/* } */
-
-/* /\* Make level2 sections split width *\/ */
-/* section.level1:has(> section.level2 ~ section.level2) > section.level2 { */
-/*   flex: 1 1 45%; */
-/*   min-width: 300px; */
-/* } */
-
 section.level1:has(> section.level2 ~ section.level2) {
   display: flex;
   flex-wrap: wrap;
   column-gap: var(--line-height);
-  /* border: 2px solid red; */
-  /* box-sizing: border-box; */
 }
 
 section.level1 > :not(section) {
@@ -694,6 +679,7 @@ section.level1 > :not(section) {
 
 section.level1:has(> section.level2 ~ section.level2) > section.level2 {
   flex: 1 1 45%;
+
   min-width: 300px;
   /* border: 2px solid blue; */
   /* box-sizing: border-box; */
@@ -712,4 +698,18 @@ section.level1:has(> section.level2 ~ section.level2) > section.level2 {
 
 #TOC a:hover {
   text-decoration: underline;
+}
+
+/* .level2 { */
+/*   border: var(--border-thickness) solid var(--text-color); */
+/*   h2 { */
+/*     margin-top: 0; */
+/*     padding-left: 1ch; */
+/*     background: var(--text-color); */
+/*     color: var(--background-color); */
+/*   } */
+/* } */
+
+.TODO {
+  color: red;
 }
