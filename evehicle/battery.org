@@ -1,0 +1,142 @@
+#+OPTIONS: \n:t
+#+TITLE: Battery Design
+#+LANGUAGE: en
+#+AUTHOR: Ivan Nikolic
+#+DATE: [2024-12-02 Mon]
+#+LAST_MODIFIED: [2024-12-21 Sat]
+
+
+* Cell type selection
+
+Collecting data on the individual cells from https://eu.nkon.nl/
+
+#+NAME: cells
+| Name                 | Price (EUR) | Cap (Ah) | Weight (g) | Max (A) |  Type | Height (mm) | D (mm) |
+|----------------------+-------------+----------+------------+---------+-------+-------------+--------|
+| LG INR18650MH1       |        2.75 |    3.100 |         47 |       6 | 18650 |        64.5 |     18 |
+| Sanyo NCR18650GA     |         3.9 |    3.450 |         47 |      10 | 18650 |          65 |     18 |
+| Keeppower IMR26650   |        8.95 |    5.200 |       93.9 |      15 | 26650 |          67 |     26 |
+| Keeppower 26650      |        9.45 |    5.200 |         97 |      10 | 26650 |             |        |
+| Lishen LR2170SD      |         3.8 |    4.800 |         73 |     9.6 | 21700 |        70.9 |   21.7 |
+| Samsung INR21700     |        5.65 |    5.200 |         67 |      15 | 21700 |        70.6 |  21.27 |
+| Samsung INR21700-50S |        3.16 |        5 |         72 |      35 | 21700 |        70.6 |  21.25 |
+| Headway LifePO4      |          15 |   10.000 |        346 |      20 | 38120 |             |        |
+
+* Full battery performance/price calculation
+#+BEGIN_SRC python :var tab=cells :colnames yes :hlines yes :results table :exports both
+
+import math
+
+cell_voltage = 4.2
+cell_series = 20
+target_kwh = 3
+
+def process(row):
+    [name, price, capacity, weight, maxA, batt_type, height, diam] = row
+
+    # full battery voltage (aiming for 72/84v)
+    total_voltage = (cell_voltage * cell_series)
+    
+    # required capacity (Ah) of a single series stage to achieve target kWh
+    single_series_ah = (target_kwh * 1000) / total_voltage
+    
+    # number of cells required in each stage
+    P = math.ceil(single_series_ah / capacity)
+    
+    # total battery kWh
+    kWh = (P *  capacity * total_voltage) / 1000
+
+    # total cells in the battery
+    cell_n = P * 20
+
+    # full price, weight
+    total_price = round(cell_n * price)
+    total_weight = round(cell_n * weight) / 1000
+
+    # max safe discharge
+    total_maxA = P * maxA
+
+    return [name, P, kWh, total_price, total_weight, total_maxA, cell_n]
+
+return([['Name', '20SxP', 'kWh', 'Price (EUR)', 'Weight (Kg)', 'Max (A)', 'Cell Count']] + 
+       [process(row) for row in tab])
+
+#+END_SRC
+
+#+RESULTS:
+| Name                 | 20SxP |    kWh | Price (EUR) | Weight (Kg) | Max (A) | Cell Count |
+|----------------------+-------+--------+-------------+-------------+---------+------------|
+| LG INR18650MH1       |    12 | 3.1248 |         660 |       11.28 |      72 |        240 |
+| Sanyo NCR18650GA     |    11 | 3.1878 |         858 |       10.34 |     110 |        220 |
+| Keeppower IMR26650   |     7 | 3.0576 |        1253 |      13.146 |     105 |        140 |
+| Keeppower 26650      |     7 | 3.0576 |        1323 |       13.58 |      70 |        140 |
+| Lishen LR2170SD      |     8 | 3.2256 |         608 |       11.68 |    76.8 |        160 |
+| Samsung INR21700     |     7 | 3.0576 |         791 |        9.38 |     105 |        140 |
+| Samsung INR21700-50S |     8 |   3.36 |         506 |       11.52 |     280 |        160 |
+| Headway LifePO4      |     4 |   3.36 |        1200 |       27.68 |      80 |         80 |
+
+Samsung INR21700 seems most promising
+
+* Battery Design
+
+Designing a 8P20S battery,
+
+Max discharge of 100-150 amps giving 7.2/8.4kw - 10/12.6kw
+
+- let's aim for 150A
+
+** Copper bus bar sizing
+We need to determine optimal current density (A/mm²)
+Constraints here are cable temperature raise and energy losses
+
+- Copper resistivity at 20°C (ρ) = 1.68 × 10⁻⁸ Ω⋅m e(or 0.0168 Ω⋅mm²/m)
+- Copper resistivity scales linearly with temperature ρ(T) = ρ₀[1 + α(T - T₀)]
+
+#+BEGIN_SRC python :results file :exports results
+import numpy as np
+import matplotlib.pyplot as plt
+
+def calculate_resistivity(temp):
+    """Calculate copper resistivity at given temperature."""
+    rho_0 = 1.68e-8  # Reference resistivity at 20°C in Ω⋅m
+    alpha = 0.00393   # Temperature coefficient of resistance for copper
+    T_0 = 20         # Reference temperature in °C
+    return rho_0 * (1 + alpha * (temp - T_0))
+
+# Generate temperature range
+temps = np.linspace(-20, 120, 200)
+resistivities = np.array([calculate_resistivity(t) for t in temps])
+reference = calculate_resistivity(20)
+percent_changes = ((resistivities - reference) / reference) * 100
+
+# Create figure with two y-axes
+plt.style.use('dark_background')
+fig, ax1 = plt.subplots(figsize=(10, 6))
+ax2 = ax1.twinx()
+
+# Plot resistivity on left axis
+line1 = ax1.plot(temps, resistivities, 'r-', label='Resistivity')
+ax1.set_xlabel('Temperature (°C)')
+ax1.set_ylabel('Resistivity (Ω⋅m)')
+ax1.grid(True)
+ax1.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+
+# Plot percent change on right axis
+line2 = ax2.plot(temps, percent_changes, 'c-', label='% Change')
+ax2.set_ylabel('Change from 20°C (%)')
+
+# Combine legends
+lines = line1 + line2
+labels = [l.get_label() for l in lines]
+ax1.legend(lines, labels, loc='upper left')
+
+plt.title('Copper Resistivity vs Temperature')
+plt.tight_layout()
+
+# Save plot
+plt.savefig('resistivity_plot.png', dpi=150, bbox_inches='tight')
+return 'resistivity_plot.png'
+#+END_SRC
+
+#+RESULTS:
+[[file:resistivity_plot.png]]
