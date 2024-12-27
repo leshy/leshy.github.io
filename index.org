@@ -26,7 +26,7 @@ architecture, gis, 3d modeling, sattelite data
 web, shaders, supercollider, midi
 
 ** evehicle
-[[./evehicle/evehicle.jpg]]
+[[./evehicle/battery/][./evehicle/evehicle.jpg]]
 
 battery construction, cnc
 
