@@ -1,3 +1,36 @@
+:root,
+svg {
+  --color-red: #fd5548;
+  --color-green: #73e3bb;
+  --color-blue: #469ecc;
+  --color-lightblue: #adf7f6;
+  --color-orange: #ffa500;
+  --color-bgblue: #141d22;
+
+  --text-color: #fff;
+  --text-color-alt: #aaa;
+  --text-color-p: #ccc;
+  --background-color: #000;
+  --background-color-alt: #111;
+
+  --font-family: "JetBrains Mono", monospace;
+  --line-height: 1.2rem;
+  --border-thickness: 1px;
+
+  --font-weight-normal: 500;
+  --font-weight-medium: 600;
+  --font-weight-bold: 800;
+
+  fill: var(--text-color);
+  font-family: var(--font-family);
+  font-optical-sizing: auto;
+  font-weight: var(--font-weight-normal);
+  font-style: normal;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-size: 16px;
+  width: 100%;
+}
+
 a:has(> img) {
   position: relative;
   display: inline-block; /* Establish stacking context for ::before */
@@ -94,32 +127,6 @@ a:hover:has(> img)::before {
   }
 }
 
-:root,
-svg {
-  --text-color: #fff;
-  --text-color-alt: #aaa;
-  --text-color-p: #ccc;
-  --background-color: #000;
-  --background-color-alt: #111;
-
-  --font-family: "JetBrains Mono", monospace;
-  --line-height: 1.2rem;
-  --border-thickness: 2px;
-
-  --font-weight-normal: 500;
-  --font-weight-medium: 600;
-  --font-weight-bold: 800;
-
-  fill: var(--text-color);
-  font-family: var(--font-family);
-  font-optical-sizing: auto;
-  font-weight: var(--font-weight-normal);
-  font-style: normal;
-  font-variant-numeric: tabular-nums lining-nums;
-  font-size: 16px;
-  width: 100%;
-}
-
 * {
   box-sizing: border-box;
 }
@@ -170,6 +177,7 @@ h3,
 h4,
 h5,
 h6 {
+  color: var(--color-green);
   font-weight: var(--font-weight-bold);
   margin: calc(var(--line-height) * 2) 0 var(--line-height);
   line-height: var(--line-height);
@@ -183,7 +191,7 @@ h1 {
 }
 
 h2 {
-  color: #ffa500;
+  color: var(--color-lightblue);
   /* color: var(--background-color); */
   /* background: var(--text-color); */
   font-size: 1rem;
@@ -285,9 +293,15 @@ th {
 .header {
   margin-bottom: calc(var(--line-height) * 2);
 }
+
+tr.header {
+  color: var(--color-lightblue);
+}
+
 .header h1 {
   margin: 0;
 }
+
 .header tr td:last-child {
   text-align: right;
 }
@@ -311,7 +325,8 @@ img {
 }
 
 details {
-  border: var(--border-thickness) solid var(--text-color);
+  background-color: var(--color-bgblue);
+  border: var(--border-thickness) dashed var(--color-blue);
   padding: calc(var(--line-height) - var(--border-thickness)) 1ch;
   margin-bottom: var(--line-height);
 }
@@ -319,6 +334,7 @@ details {
 summary {
   font-weight: var(--font-weight-medium);
   cursor: pointer;
+  color: var(--color-green);
 }
 details[open] summary {
   margin-bottom: var(--line-height);
@@ -621,52 +637,6 @@ code {
   color: var(--text-color-alt);
 }
 
-code span.al {
-  font-weight: var(--font-weight-bold);
-  color: var(--text-color);
-} /* Alert */
-code span.an {
-  font-style: italic;
-} /* Annotation */
-code span.cf {
-  font-weight: var(--font-weight-bold);
-  color: var(--text-color);
-} /* ControlFlow */
-code span.co {
-  font-style: italic;
-} /* Comment */
-code span.cv {
-  font-style: italic;
-} /* CommentVar */
-code span.do {
-  font-style: italic;
-} /* Documentation */
-code span.dt {
-  text-decoration: underline;
-} /* DataType */
-code span.er {
-  font-weight: var(--font-weight-bold);
-  color: var(--text-color);
-} /* Error */
-code span.in {
-  font-style: italic;
-} /* Information */
-code span.kw {
-  font-weight: var(--font-weight-bold);
-  color: var(--text-color);
-} /* Keyword */
-code span.pp {
-  font-weight: var(--font-weight-bold);
-  color: var(--text-color);
-} /* Preprocessor */
-code span.at {
-  font-weight: var(--font-weight-bold);
-  color: var(--text-color);
-} /* idk */
-code span.wa {
-  font-style: italic;
-} /* Warning */
-
 section.level1:has(> section.level2 ~ section.level2) {
   display: flex;
   flex-wrap: wrap;
@@ -711,5 +681,18 @@ section.level1:has(> section.level2 ~ section.level2) > section.level2 {
 /* } */
 
 .TODO {
-  color: red;
+  color: var(--color-red);
+}
+
+.DONE {
+  color: var(--color-green);
+}
+
+u:before {
+  content: "⚠ ";
+}
+
+u {
+  color: var(--color-red);
+  text-decoration: none;
 }

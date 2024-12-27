@@ -6,8 +6,62 @@
 #+LAST_MODIFIED: [2024-12-21 Sat]
 
 
-* Cell selection
+#+BEGIN_SRC python :results none :exports none :session battcalc
+from typing import Dict, List, Union
 
+def compute(known_values: Dict[Symbol, Union[float, np.ndarray]], 
+           targets: List[Symbol]):
+    
+    # 1. Analyze what symbols are needed for each target
+    def get_free_symbols(expr):
+        if hasattr(expr, 'free_symbols'):
+            return expr.free_symbols
+        return set()
+    
+    needed_symbols = set()
+    for target in targets:
+        needed_symbols.update(get_free_symbols(target))
+    
+    # 2. Check if we can compute numerically
+    missing_symbols = needed_symbols - set(known_values.keys())
+    if missing_symbols:
+        raise Exception("missing symbols " + missing_symbols)
+    
+    # 3. Create vectorized functions
+    all_symbols = tuple(needed_symbols)  # Fix the order of all symbols
+    numeric_funcs = {
+        target: lambdify(all_symbols, target, 'numpy')
+        for target in targets
+    }
+    
+    # 4. Set up parameter grids for array inputs
+    array_inputs = {sym: val for sym, val in known_values.items() 
+                   if isinstance(val, np.ndarray)}
+    if array_inputs:
+        grid_arrays = np.meshgrid(*[val for val in array_inputs.values()])
+        grid_dict = dict(zip(array_inputs.keys(), grid_arrays))
+        eval_dict = {**known_values, **grid_dict}
+    else:
+        eval_dict = known_values
+    
+    args = [eval_dict[sym] for sym in all_symbols]
+    return [ numeric_funcs[target](*args) for target in targets ]
+
+# Test cases
+temps = np.linspace(-20, 100, 5)
+voltages = np.linspace(48, 84, 3)
+
+# one, two = compute(
+#     {**material_copper, temperature: temps, current: 150, voltage: voltages, 
+#      length: 2, area_mm2: 100},
+#     [ power_loss_percent, power_loss ],
+# )
+
+# print(one)
+# print(two)
+#+END_SRC
+
+* Cell selection
 Collecting data on the individual cells from https://eu.nkon.nl/
 
 #+NAME: cells
@@ -23,7 +77,6 @@ Collecting data on the individual cells from https://eu.nkon.nl/
 | Headway LifePO4      |          15 |   10.000 |        346 |      20 | 38120 |             |        |
 
 * Full battery output/price calculation
-
 How many cells do I need to go in series to achieve min 3kWh capacity, then calculate max amps, weight etc
 
 #+BEGIN_SRC python :var tab=cells :colnames yes :hlines yes :results table :exports both
@@ -79,38 +132,49 @@ Samsung INR21700 seems most promising:
 - low price
 - only 8 cells in series
 - best performance in terms of max output (A) (implies very fast charging as well)
-  
 Building a 8P20S battery,
 Max continuous discharge of 150A giving 7.2/8.4kw - 10/12.6kw
+  
+* Thermal performance of the cells
+Since only 8P is used we have high per-cell discharge rate which might cause thermal issues
 
-* Cell heating and losses
-
-Need to figure out what sort of cooling I need for this
-#+BEGIN_SRC python :results output :session cells :exports both
-from sympy import Symbol, solve, expand, pi
+#+BEGIN_SRC python :results table :session battcalc :exports both
+from sympy import Symbol, solve, expand, pi, lambdify
 
 # Base parameters as symbols
-n_parallel = Symbol('n_p')     # number of cells in parallel
-n_series = Symbol('n_s')       # number of cells in series
-current = Symbol('I')          # total current (A)
-cell_ir = Symbol('R_cell')     # internal resistance per cell (ohm)
-temperature = Symbol('T')      # cell temperature (°C)
-voltage = Symbol('V')          # pack voltage (V)
-ambient_temp = Symbol('T_a')   # ambient temperature (°C)
+# Geometric parameters
+cell_d_mm = Symbol('cell_d_mm')    # diameter (mm)
+cell_h_mm = Symbol('cell_h_mm')    # height (mm)
+cell_r_mm = cell_d_mm/2            # radius (mm)
+cell_r_m = cell_r_mm / 1000        # radius (m)
+cell_d_m = cell_d_mm / 1000        # diameter (m)
+cell_h_m = cell_h_mm / 1000        # height (m)
 
-# Constants for Samsung 50S
-CELL_IR = 0.014               # 14mΩ internal resistance
-CELL_VOLTAGE = 3.6            # nominal voltage
-CELL_CAPACITY = 5.0           # Ah
-CELL_MASS = 0.072             # kg
-CELL_SPEC_HEAT = 850          # J/g°C
-THERMAL_CUTOFF = 80           # °C
-THERMAL_RELEASE = 60          # °C
+# Pack configuration
+n_parallel = Symbol('n_p')         # number of cells in parallel
+n_series = Symbol('n_s')           # number of cells in series
+current = Symbol('I')              # total current (A)
+
+# Cell electrical properties
+cell_ir = Symbol('R_cell')         # internal resistance per cell (ohm)
+voltage = Symbol('V')              # cell voltage (V)
+cell_capacity = Symbol('C_cell')   # cell capacity (Ah)
+
+# Thermal properties
+temperature = Symbol('T')          # cell temperature (°C)
+ambient_temp = Symbol('T_a')       # ambient temperature (°C)
+cell_mass = Symbol('m_cell')       # cell mass (kg)
+spec_heat = Symbol('c_p')          # specific heat capacity (J/kg°C)
+thermal_cutoff = Symbol('T_max')   # thermal cutoff temperature (°C)
+thermal_release = Symbol('T_rel')  # thermal release temperature (°C)
+heat_transfer_coeff = Symbol('h')  # heat transfer coefficient W/(m²·K)
 
 # Core relationships
 cells_total = n_series * n_parallel
 current_per_cell = current / n_parallel
+
 pack_voltage = n_series * voltage
+pack_power = current * pack_voltage
 
 # Power and heat calculations
 cell_power_loss = current_per_cell**2 * cell_ir
@@ -118,96 +182,199 @@ pack_power_loss = cell_power_loss * cells_total
 pack_power = current * pack_voltage
 efficiency = (pack_power - pack_power_loss) / pack_power * 100
 
-# Temperature rise calculations (simplified)
-# Assuming natural air cooling
-heat_transfer_coeff = 10  # W/(m²·K) for natural convection
-cell_surface_area = 0.004  # m² (approximate for 21700)
+# Temperature calculations
+cell_surface_area = 2 * pi * cell_r_m**2 + 2 * pi * cell_r_m * cell_h_m
 temp_rise = cell_power_loss / (heat_transfer_coeff * cell_surface_area)
 
+# Time to thermal cutoff calculation
+thermal_time = (cell_mass * spec_heat * (thermal_cutoff - ambient_temp)) / cell_power_loss
 
-config = {
-    n_parallel: 8,
-    n_series: 20,
-    cell_ir: CELL_IR,
-    voltage: CELL_VOLTAGE,
-    ambient_temp: 40
+# Environment specification
+env_spec = {
+    ambient_temp: 40,
+    heat_transfer_coeff: 10  # W/(m²·K) for natural convection
 }
 
-def format_time(x,_=None):
-   """Convert minutes to appropriate units with smart formatting"""
-   if x < 60:
-       return f'{x*60:.0f}s'
-   elif x < (3600):
-      minutes = x / 60
-      return f'{minutes:.0f}min'
-   else:
-       hours = x/(3600)
-       if hours < 24:
-           return f'{hours:.1f}h'
-       else:
-           days = hours/24
-           return f'{days:.1f}d'
+# Battery pack configuration
+pack_spec = {
+    n_parallel: 8,
+    n_series: 20,
+    cell_d_mm: 21,
+    cell_h_mm: 70
+}
+
+# Cell specifications (Samsung 50S as default)
+cell_spec = { 
+    cell_ir: 0.014,          # 14mΩ internal resistance
+    cell_mass: 0.072,        # kg
+    voltage: 3.6,            # V
+    cell_capacity: 5.0,      # Ah
+    spec_heat: 850,          # J/kg°C
+    thermal_cutoff: 80,      # °C
+    thermal_release: 60      # °C
+}
+
+def format_time(x, _=None):
+    if x < 60:
+        return f'{x*60:.0f}s'
+    elif x < (3600):
+        minutes = x / 60
+        return f'{minutes:.0f}min'
+    else:
+        hours = x/(3600)
+        if hours < 24:
+            return f'{hours:.1f}h'
+        else:
+            days = hours/24
+            return f'{days:.1f}d'
 
 def calculate_losses(total_current):
     """Calculate losses for a given current"""
-    subs_dict = {**config, current: total_current}
-    
+    subs_dict = {**cell_spec, **pack_spec, **env_spec, current: total_current}
     heat_per_cell = cell_power_loss.subs(subs_dict)
     total_heat = pack_power_loss.subs(subs_dict)
     eff = efficiency.subs(subs_dict)
     temp_increase = temp_rise.subs(subs_dict)
-    
-    print(f"At {total_current}A total current:")
-    print(f"Current per cell: {total_current/config[n_parallel]:.2f}A")
+    time_to_cutoff = thermal_time.subs(subs_dict)
+    power = pack_power.subs(subs_dict)
+    voltage = pack_voltage.subs(subs_dict)
+
+    print(f"At {int(power)}W")
+    print(f"Total current: {total_current}A at {int(voltage)}V")
+    print(f"Current per cell: {total_current/pack_spec[n_parallel]:.2f}A")
     print(f"Heat generation per cell: {heat_per_cell:.2f}W")
     print(f"Pack efficiency: {eff:.2f}%")
     print(f"Estimated temp rise above ambient: {temp_increase:.2f}°C")
-    print(f"Time to reach {THERMAL_CUTOFF}°C (no cooling): {format_time((THERMAL_CUTOFF - 20) * CELL_MASS * CELL_SPEC_HEAT / heat_per_cell)}")
+    print(f"Time to reach {cell_spec[thermal_cutoff]}°C (no cooling): {format_time(float(time_to_cutoff))}")
     print("")
 
-# Test different currents
-for test_current in [90, 150]:
+    
+# Example usage with different currents
+for test_current in [50, 100, 150]:
     calculate_losses(test_current)
+    
+import numpy as np
+import math
+
+current_range = np.linspace(50, 200, 4)
+rows = []
+vals = { **cell_spec, **pack_spec, **env_spec, current: current_range}
+
+
+def round_row(*row):
+    return [ f"{item:.2f}" for item in row]
+
+headers = ["Current (A)", "Time", "eff (%)", "cell (W)", "pack (W)"]
+rows = compute(vals, [ thermal_time, efficiency, cell_power_loss, temp_rise ])
+rows[0] = map(format_time, rows[0])
+rows[1] = map(int, rows[1])
+rows[2] = map(lambda x: f"{x:.2f}", rows[2])
+rows[3] = map(lambda x: f"{x:.2f}", rows[3])
+
+[headers, *zip(current_range, *rows)]
 #+END_SRC
 
 #+RESULTS:
-#+begin_example
-At 90A total current:
-Current per cell: 11.25A
-Heat generation per cell: 1.77W
-Pack efficiency: 95.62%
-Estimated temp rise above ambient: 44.30°C
-Time to reach 80°C (no cooling): 35min
+| Current (A) | Time  | eff (%) | cell (W) | pack (W) |
+|        50.0 | 1.2h  |      97 |     0.55 |    10.30 |
+|       100.0 | 19min |      95 |     2.19 |    41.19 |
+|       150.0 | 8min  |      92 |     4.92 |    92.68 |
+|       200.0 | 5min  |      90 |     8.75 |   164.76 |
 
-At 150A total current:
+
+#+begin_example
+At 3600W
+Total current: 50A at 72V
+--- Current per cell: 6.25A
+- Heat generation per cell: 0.55W
+- Pack efficiency: 97.57%
+Estimated temp rise above ambient: 10.30°C
+- Time to reach 80°C (no cooling): 1.2h
+
+At 7200W
+Total current: 100A at 72V
+Current per cell: 12.50A
+Heat generation per cell: 2.19W
+Pack efficiency: 95.14%
+Estimated temp rise above ambient: 41.19°C
+Time to reach 80°C (no cooling): 19min
+
+At 10800W
+Total current: 150A at 72V
 Current per cell: 18.75A
 Heat generation per cell: 4.92W
 Pack efficiency: 92.71%
-Estimated temp rise above ambient: 123.05°C
-Time to reach 80°C (no cooling): 12min
+Estimated temp rise above ambient: 92.68°C
+Time to reach 80°C (no cooling): 8min
 #+end_example
 
-#+BEGIN_SRC python :results file :session cells :exports both
+#+BEGIN_SRC python :results file :session battcalc :exports both
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator, FuncFormatter, LogLocator
+from matplotlib.style import library
+
+print(plt.rcParams.keys())
+
+colors = {
+    "orange": "#ffa500",
+    "lightblue": '#adf7f6',
+    "blue": '#469ecc',
+    "red": "#fd5548",
+    "green": "#73e3bb"
+}
+
+print(library['dark_background'])
+style = {
+    ,**library['dark_background'],
+    
+    # Frame (spines)
+    'axes.spines.top': True,
+    'axes.spines.right': True,
+    'axes.spines.left': True,
+    'axes.spines.bottom': True,
+    'figure.facecolor': (0,0,0,0),
+    'axes.facecolor': '#141d22',
+    'axes.linewidth': 1.5,
+    'axes.xmargin': 0.05,
+    'axes.ymargin': 0.05,
+    'axes.zmargin': 0.05,
+
+    # legend
+    'legend.fontsize': 'large',
+    'legend.title_fontsize': 'large',
+    'legend.fancybox': False,
+    'legend.edgecolor': colors["blue"],
+    'legend.borderaxespad': 0.5,
+    
+    # Grid
+    'axes.edgecolor': colors["blue"],
+    'axes.labelcolor': colors["green"],
+    'axes.labelsize': 17,
+    'axes.grid': True,
+
+    
+    'xtick.color': colors["lightblue"],
+    'ytick.color': colors["lightblue"],
+    
+    'axes.labelpad': 10,
+    'xtick.major.pad': 10,
+    'ytick.major.pad': 10,
+
+    'grid.alpha': 0.33,
+    'grid.linestyle': ':',
+    'grid.linewidth': 1,
+    'grid.color': colors["blue"],
+    
+    # Minor grid
+    'axes.grid.which': 'major',  # 'major', 'minor', or 'both'
+    
+}
 
 # Setup plot style
-plt.style.use('dark_background')
+plt.style.use(style)
 plt.rcParams['font.family'] = 'monospace'
 plt.rcParams['font.size'] = 15
-
-# Battery parameters
-CELL_IR = 0.014  # 14mΩ
-N_PARALLEL = 8
-CELL_VOLTAGE = 3.6
-N_SERIES = 20
-PACK_VOLTAGE = CELL_VOLTAGE * N_SERIES
-CELL_MASS = 0.072  # kg
-CELL_SPEC_HEAT = 850  # J/kg°C
-T_AMBIENT = 40  # °C
-T_MAX = 80  # °C
-DELTA_T = T_MAX - T_AMBIENT  # Temperature rise to reach 80°C
 
 # Create figure with multiple subplots
 fig, (ax1, ax3) = plt.subplots(2, 1, figsize=(12, 14))
@@ -215,72 +382,104 @@ ax2 = ax1.twinx()
 
 # Define current range (starting from small non-zero value)
 currents = np.linspace(40, 190, 100)
-current_per_cell = currents / N_PARALLEL
+
+# Base substitution dictionary (everything except current and cell_ir)
+base_subs = {
+    ,**pack_spec,
+    ,**env_spec,
+    ,**{k: v for k, v in cell_spec.items() if k != cell_ir}
+}
 
 # Calculate for different internal resistances
 for ir_mult in [0.8, 1.0, 1.2, 1.4]:
-   resistance = CELL_IR * ir_mult
-   
-   # Calculate losses
-   cell_losses = (current_per_cell**2 * resistance)
-   pack_losses = cell_losses * (N_PARALLEL * N_SERIES)
-   pack_power = currents * PACK_VOLTAGE
-   efficiency = 100 * (1 - pack_losses/pack_power)
-   
-   # Calculate time to reach 80°C (assuming adiabatic heating)
-   energy_needed = CELL_MASS * CELL_SPEC_HEAT * DELTA_T  # Joules needed per cell
-   time_to_80deg = energy_needed / cell_losses  # seconds
-   
-   # Plot power losses and efficiency
-   line1 = ax1.plot(
-       currents, 
-       pack_losses,
-       linewidth=2,
-       label=f'{ir_mult*CELL_IR*1000:.1f}mΩ'
-   )
-   
-   line2 = ax2.plot(
-       currents,
-       efficiency,
-       linewidth=2,
-      alpha=0.75,
-      linestyle='--'
-   )
-   
-   # Plot time to reach 80°C
-   line3 = ax3.plot(
-       currents,
-       time_to_80deg,
-       linewidth=2,
-       label=f'{ir_mult*CELL_IR*1000:.1f}mΩ'
-   )
+    # Create substitution dictionary with current IR value
+    ir_value = cell_spec[cell_ir] * ir_mult
+    
+    # Arrays to store results
+    pack_losses_arr = []
+    efficiency_arr = []
+    time_to_80deg_arr = []
+    
+    # Calculate values for each current
+    for current_val in currents:
+        # Complete substitution dictionary for this calculation
+        subs = {
+            ,**base_subs,
+            current: current_val,
+            cell_ir: ir_value
+        }
+        
+        # Calculate using SymPy expressions
+        pack_losses_val = float(pack_power_loss.subs(subs))
+        efficiency_val = float(efficiency.subs(subs))
+        thermal_time_val = float(thermal_time.subs(subs))
+        
+        pack_losses_arr.append(pack_losses_val)
+        efficiency_arr.append(efficiency_val)
+        time_to_80deg_arr.append(thermal_time_val)
+    
+    # Convert to numpy arrays
+    pack_losses_arr = np.array(pack_losses_arr)
+    efficiency_arr = np.array(efficiency_arr)
+    time_to_80deg_arr = np.array(time_to_80deg_arr)
+    
+    # Plot power losses and efficiency
+    line1 = ax1.plot(
+        currents, 
+        pack_losses_arr,
+        linewidth=2,
+        label=f'{ir_value*1000:.1f}mΩ'
+    )
+    
+    line2 = ax2.plot(
+        currents,
+        efficiency_arr,
+        linewidth=2,
+        alpha=0.75,
+        linestyle='--'
+    )
+    
+    # Plot time to reach 80°C
+    line3 = ax3.plot(
+        currents,
+        time_to_80deg_arr/60,  # Convert to minutes
+        linewidth=2,
+        label=f'{ir_value*1000:.1f}mΩ'
+    )
+
 
 # Configure top plot
 ax1.set_xlabel('Pack Current (A)')
-ax1.set_ylabel('Total Heat Generation (Watts)', color='cyan')
-ax2.set_ylabel('Pack Efficiency (%)', color='orange')
+ax1.set_ylabel('Total Heat Generation (Watts)')
+ax2.set_ylabel('Pack Efficiency (%)', color=colors["red"])
 
-ax2.axvline(x=150, color='red', linestyle='--', alpha=0.75, label='Max')
-ax2.axvline(x=100, color='orange', linestyle='--', alpha=0.75, label='High')
-ax2.axvline(x=50, color='green', linestyle='--', alpha=0.75, label='Normal')
+ax1.axvline(x=150, color=colors["red"], linestyle='--', alpha=0.75, label='Max')
+ax1.axvline(x=100, color=colors["orange"], linestyle='--', alpha=0.75, label='High')
+ax1.axvline(x=50, color=colors["green"], linestyle='--', alpha=0.75, label='Normal')
 
 # Configure bottom plot
 ax3.set_xlabel('Pack Current (A)')
-ax3.set_ylabel('Time to reach 80°C (minutes)', color='cyan')
+ax3.set_ylabel('Time to reach 80°C (minutes)')
 ax3.set_yscale('log')  # Use log scale for time
 ax3.yaxis.set_major_formatter(FuncFormatter(format_time))
 ax3.yaxis.set_major_locator(LogLocator(base=1.1))
 
+
 # Add grids
-ax1.grid(True, which="major", ls="-", alpha=0.3)
-ax1.grid(True, which="minor", ls=":", alpha=0.2)
-ax3.grid(True, which="major", ls="-", alpha=0.3)
-ax3.grid(True, which="minor", ls=":", alpha=0.2)
+#alpha = 0.5
+#ax1.grid(True, which="major", marker="X")
+ax2.grid(False)
+ax2.spines['top'].set_visible(False)
+ax2.spines['right'].set_visible(False)
+ax2.spines['bottom'].set_visible(False)
+ax2.spines['left'].set_visible(False)
+#ax3.grid(True, which="major", ls="-")
+#ax3.grid(True, which="minor", ls=":")
 
+ax3.axvline(x=150, color=colors["red"], linestyle='--', alpha=0.75, label='Max')
+ax3.axvline(x=100, color=colors["orange"], linestyle='--', alpha=0.75, label='High')
+ax3.axvline(x=50, color=colors["green"], linestyle='--', alpha=0.75, label='Normal')
 
-ax3.axvline(x=150, color='red', linestyle='--', alpha=0.75, label='Max')
-ax3.axvline(x=100, color='orange', linestyle='--', alpha=0.75, label='High')
-ax3.axvline(x=50, color='green', linestyle='--', alpha=0.75, label='Normal')
 
 # Set axis intervals
 ax1.xaxis.set_major_locator(MultipleLocator(10))
@@ -288,23 +487,24 @@ ax1.yaxis.set_major_locator(MultipleLocator(200))
 ax3.xaxis.set_major_locator(MultipleLocator(20))
 
 # Add legends
-legend1 = ax1.legend(title='Cell Internal Resistance', loc='upper right')
-legend3 = ax3.legend(title='Cell Internal Resistance', loc='upper right')
-frame1 = legend1.get_frame()
-frame3 = legend3.get_frame()
-frame1.set_facecolor('none')
-frame1.set_facecolor((0.1, 0.1, 0.1, 0.5))
-frame3.set_facecolor((0.1, 0.1, 0.1, 0.5))
+# legend1 = ax1.legend(title='Cell Internal Resistance', loc='upper right')
+# legend3 = ax3.legend(title='Cell Internal Resistance', loc='upper right')
+# frame1 = legend1.get_frame()
+# frame3 = legend3.get_frame()
+# frame1.set_facecolor('none')
+# frame1.set_facecolor((0, 0, 0.01, 0.5))
+# frame3.set_facecolor((0, 0, 0.01, 0.5))
 
 plt.tight_layout()
 
 # Save and return
-plt.savefig('battery_thermal.svg', dpi=150, bbox_inches='tight', format='svg', transparent=True)
+plt.savefig('battery_thermal.svg', dpi=150, bbox_inches='tight', format='svg', transparent=False)
 'battery_thermal.svg'
 #+END_SRC
 #+RESULTS:
 [[file:battery_thermal.svg]]
 
+These are for static air, this seems promising given I create airflow
 
 * Copper bus bar and cabling
 
@@ -316,7 +516,7 @@ We need to determine optimal current density (A/mm²)
 
 Building a model of the wire using sympy
 
-#+BEGIN_SRC python :results none :exports code :session cablecalc
+#+BEGIN_SRC python :results none :exports code :session battcalc
 from sympy import Symbol, solve, init_printing, expand, sqrt, pi
 from sympy.utilities.lambdify import lambdify
 
@@ -368,59 +568,6 @@ resistance_fn = lambdify([length, area_mm2, temperature], resistance)
 print(inspect.signature(resistance_fn))
 print(resistance_fn(2, 100, np.linspace(-20,100,5)))
 #+END_SRC
-#+BEGIN_SRC python :results none :exports none :session cablecalc
-from typing import Dict, List, Union
-
-def compute(known_values: Dict[Symbol, Union[float, np.ndarray]], 
-           targets: List[Symbol]):
-    # 1. Analyze what symbols are needed for each target
-    def get_free_symbols(expr):
-        if hasattr(expr, 'free_symbols'):
-            return expr.free_symbols
-        return set()
-    
-    needed_symbols = set()
-    for target in targets:
-        needed_symbols.update(get_free_symbols(target))
-    
-    # 2. Check if we can compute numerically
-    missing_symbols = needed_symbols - set(known_values.keys())
-    if missing_symbols:
-        raise Exception("missing symbols " + missing_symbols)
-    
-    # 3. Create vectorized functions
-    all_symbols = tuple(needed_symbols)  # Fix the order of all symbols
-    numeric_funcs = {
-        target: lambdify(all_symbols, target, 'numpy')
-        for target in targets
-    }
-    
-    # 4. Set up parameter grids for array inputs
-    array_inputs = {sym: val for sym, val in known_values.items() 
-                   if isinstance(val, np.ndarray)}
-    if array_inputs:
-        grid_arrays = np.meshgrid(*[val for val in array_inputs.values()])
-        grid_dict = dict(zip(array_inputs.keys(), grid_arrays))
-        eval_dict = {**known_values, **grid_dict}
-    else:
-        eval_dict = known_values
-    
-    args = [eval_dict[sym] for sym in all_symbols]
-    return [ numeric_funcs[target](*args) for target in targets ]
-
-# Test cases
-temps = np.linspace(-20, 100, 5)
-voltages = np.linspace(48, 84, 3)
-
-one, two = compute(
-    {**material_copper, temperature: temps, current: 150, voltage: voltages, 
-     length: 2, area_mm2: 100},
-    [ power_loss_percent, power_loss ],
-)
-
-print(one)
-print(two)
-#+END_SRC
 
 How do the power losses change with ambient temperatures and cable cross section?
 
@@ -429,19 +576,11 @@ How do the power losses change with ambient temperatures and cable cross section
 - length: 2m
 - power 12kW (where I = 150A, V = 84V)
 
-#+BEGIN_SRC python :results file :exports both :session cablecalc
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator
-
-# Setup plot style
-plt.style.use('dark_background')
-plt.rcParams['font.family'] = 'monospace'
-plt.rcParams['font.size'] = 15
+#+BEGIN_SRC python :results file :exports both :session battcalc
 
 # Define parameter ranges
 values = {
-    **material_copper,
+    ,**material_copper,
     area_mm2: np.linspace(25, 200, 20),
     current: 150,
     voltage: 84,
@@ -451,10 +590,6 @@ values = {
 # Create figure with primary and secondary y-axes
 fig, ax1 = plt.subplots(figsize=(12, 7))
 ax2 = ax1.twinx()
-
-# fig.patch.set_alpha(0.0)
-# ax1.patch.set_alpha(0.0)
-# ax2.patch.set_alpha(0.0)
 
 # Plot lines for each temperature
 for temp in np.linspace(-20, 100, 4):
@@ -472,12 +607,17 @@ for temp in np.linspace(-20, 100, 4):
 
 # Configure axes
 ax1.set_xlabel('Cable Cross-sectional Area (mm²)')
-ax1.set_ylabel('Power Loss (Watts)', color='cyan')
-ax2.set_ylabel('Loss Percentage (%)', color='orange')
+ax1.set_ylabel('Power Loss (Watts)')
+ax2.set_ylabel('Loss Percentage (%)', color=colors["red"])
 
 # Add grid
 ax1.grid(True, which="major", ls="-", alpha=0.3)
 ax1.grid(True, which="minor", ls=":", alpha=0.2)
+ax2.grid(False)
+ax2.spines['top'].set_visible(False)
+ax2.spines['right'].set_visible(False)
+ax2.spines['bottom'].set_visible(False)
+ax2.spines['left'].set_visible(False)
 
 # Set axis intervals
 ax1.xaxis.set_major_locator(MultipleLocator(10))
@@ -486,21 +626,22 @@ ax1.yaxis.set_major_locator(MultipleLocator(5))
 # Add legend
 legend = ax1.legend(title='Ambient Temperature', loc='upper right')
 frame = legend.get_frame()
-frame.set_facecolor('none')
+#frame.set_facecolor('#010101')
 
 plt.tight_layout()
 
+
 # Save and return
-plt.savefig('cable_losses.svg', dpi=150, bbox_inches='tight', format='svg', transparent=True)
+plt.savefig('cable_losses.svg', dpi=150, bbox_inches='tight', format='svg', transparent=False)
 'cable_losses.svg'
 #+END_SRC
 
 #+RESULTS:
-[[file:]]
+[[file:cable_losses.svg]]
 
 Ambient temperature doesn't seem important. We'll analize the system at 60 degrees from now on, 2 meters length.
 
-#+BEGIN_SRC python :results table :exports both :session cablecalc :results table
+#+BEGIN_SRC python :results table :exports both :session battcalc :results table
 import numpy as np
 
 values = {
@@ -544,48 +685,10 @@ We are well within the safety margins.
 - 1.5A per mm² gives us 0.07% losses, wasting 8.75W
 - 1.0A per mm² gives us 0.05% losses, wasting 5.8W
 
-We are ok with 50 mm² and above, so 8mm inner cable diameter.
+Seems ok with 50 mm² and above, so 8mm inner cable diameter.
 (keep in mind 150A is 13kw so these are 0.14% losses at peaks)
 
-_our goal for the rest of the system is >0.15% losses at peaks_
-
-* Cabling Structure
-- Building 2 batteries, 3.3kWh each (15-20kg each?)
-- Optionally can run on one battery, so independant systems, each cable can take the full 150A load though
-- Cabling as a part of the battery itself, plugs on the bike.
-
-** Diagram
-#+BEGIN_SRC diagon :mode GraphDAG :exports results
-battery1 -> esc
-battery2 -> esc
-esc -> motor
-#+END_SRC
-#+RESULTS:
-#+begin_example
-┌────────┐┌────────┐
-│battery1││battery2│
-└┬───────┘└┬───────┘
-┌▽─────────▽┐       
-│esc        │       
-└┬──────────┘       
-┌▽────┐             
-│motor│             
-└─────┘             
-
-#+end_example
-
-** Cables
-50mm² cables
-
-** Connectors
-what type of connectors for the battery itself, for the bike?
-
-** Bus bar sizing
-we can go for 75mm²-100mm² just to avoid estimated 70deg heating at peaks within the battery.
-
-20mm x 3-5mm
-or
-30mm x 2-3mm
+_goal for the rest of the system will be >0.15% losses at peaks_
 
 * Cell Structure
 
@@ -623,7 +726,6 @@ Two bus bars between parallel elements, which means each bar needs to carry 75A.
 with 2-3/mm2 capacity it needs 25-40 mm2 cross section which means 20x2mm bar?
 
 ** 3 Bus bars
-
 #+begin_example
         ┇      ┇      ┇
   ┌────┐┇┌────┐┇┌────┐┇┌────┐
@@ -651,7 +753,6 @@ A bit scarry since individual screws connect negative and positive terminals (in
 
 ** Inter Cell Connections
 we need to re-do the calculations for the nickel
-
 
 #+begin_example
 ┌─────┐ ┌─────┐ 
@@ -685,7 +786,7 @@ we need to re-do the calculations for the nickel
 #+end_example
 
 ** Loss/temp table for bus bars
-#+BEGIN_SRC python :results table :exports both :session cablecalc :results table
+#+BEGIN_SRC python :results table :exports both :session battcalc :results table
 import numpy as np
 
 values = {
@@ -721,10 +822,10 @@ for area in np.linspace(10, 60, 6):
 | 50.00 |  1.12 |      7.98 |     0.15 |     0.00 |    9.73 |
 | 60.00 |  0.93 |      8.74 |     0.12 |     0.00 |    7.40 |
 
-** 2S8P Model
+* Initial 2S8P Model
 Modelling two parallel blocks with 20x3 mm bus bars
-
-#+begin_src openscad :file cube.png :results file link :exports both :axes t :camera 0,0,0,45,0,45,400
+# :camera 0,0,0,45,0,45,400
+#+begin_src openscad :file single_series.png :results file link :exports both :axes t
 cell_height = 70.7;
 cell_r = 10.625;
 cell_d = cell_r * 2;
@@ -827,26 +928,54 @@ module series_pair() {
 
 translate([(-parallel_module_x / 2) + cell_d - cell_distance, -parallel_module_y + (module_distance /2), 0]) series_pair();
 
+//color([115/170, 184/170, 115/170], 0.5)
+//spread(series_xn, series_yn, parallel_module_x + module_distance, parallel_module_y + module_distance )
+//parallel_module();
+#+end_src
 
+#+RESULTS:
+[[file:single_series.png]]
+
+
+wrote a cli for [[https://github.com/leshy/scad-clj-cli][clojure -> openscad compiler]] because we are not barbarians here
+
+#+begin_src scadclj :file cube.png :results file link :exports both :axes t
+(let [cell_height 70.7
+      cell_r 10.625
+      alpha 0.5
+      batteryGreen [0.6 1 0.6 alpha]
+      batterySilver [1 1 1 alpha]
+      ]
+  
+(def cell
+  (union
+   (color batteryGreen (cylinder cell_r, cell_height)
+   (translate [0,0,(+ (/ cell_height 2) 1) ]
+              (cylinder 5 2)))))
+
+cell)
 #+end_src
 
 #+RESULTS:
 [[file:cube.png]]
 
 
-Actually from this it seems that we might as well have a totally flat copper on top, with potentially holes for cell level fusing.
+** Unified bus bar?
+Actually from this it seems that a totally flat copper plate is better then bus bars, with potentially holes for cell level fusing.
 
-Covering the tops without protruding would be 80mm wide, 80x2mm makes a bar that causes almost no heating at 150A, with holes in copper plate I can have cell level fusing.
+Covering the tops without protruding around the cells would make the plate 80mm wide, 80x2mm makes a bar that causes almost no heating at 150A
 
-Seems like pros have decided for the similar approach?
+Some pros seem to have reached the same conclusions:
 
 [[./pro-battery.png]]
+
+_Note that here bus bar is not in contact with actual cells, likely to eliminate vibration of the plate damaging battery insulation_
 
 ** Cell level fusing
 
 We expect each of our cells to be able to output 18.75A, how will a 2cm strip of nickel perform here?
 
-#+BEGIN_SRC python :results table :exports both :session cablecalc :results table
+#+BEGIN_SRC python :results table :exports both :session battcalc :results table
 import numpy as np
 
 values = {
@@ -860,7 +989,7 @@ values = {
 def round_row(*row):
     return [ f"{item:.2f}" for item in row]
 
-headers = ["mm²", "A/mm²", "diam (mm)", "Loss (W)", "Loss (%)", "ΔT (°C)"]
+headers = ["mm²", "A/mm²", "D (mm)", "Loss (W)", "Loss (%)", "ΔT (°C)"]
 rows = []
 for area in np.linspace(3, 12, 7):
     vals = compute(
@@ -875,19 +1004,59 @@ for area in np.linspace(3, 12, 7):
 #+END_SRC
 
 #+RESULTS:
-|   mm² | A/mm² | diam (mm) | Loss (W) | Loss (%) | ΔT (°C) |
-|  3.00 |  6.25 |      1.95 |     0.20 |     0.26 |  330.86 |
-|  4.50 |  4.17 |      2.39 |     0.14 |     0.17 |  180.10 |
-|  6.00 |  3.12 |      2.76 |     0.10 |     0.13 |  116.98 |
-|  7.50 |  2.50 |      3.09 |     0.08 |     0.10 |   83.70 |
-|  9.00 |  2.08 |      3.39 |     0.07 |     0.09 |   63.67 |
-| 10.50 |  1.79 |      3.66 |     0.06 |     0.07 |   50.53 |
-| 12.00 |  1.56 |      3.91 |     0.05 |     0.06 |   41.36 |
+|   mm² | A/mm² | D (mm) | Loss (W) | Loss (%) | ΔT (°C) |
+|-------+-------+--------+----------+----------+---------|
+|  3.00 |  6.25 |   1.95 |     0.20 |     0.26 |  330.86 |
+|  4.50 |  4.17 |   2.39 |     0.14 |     0.17 |  180.10 |
+|  6.00 |  3.12 |   2.76 |     0.10 |     0.13 |  116.98 |
+|  7.50 |  2.50 |   3.09 |     0.08 |     0.10 |   83.70 |
+|  9.00 |  2.08 |   3.39 |     0.07 |     0.09 |   63.67 |
+| 10.50 |  1.79 |   3.66 |     0.06 |     0.07 |   50.53 |
+| 12.00 |  1.56 |   3.91 |     0.05 |     0.06 |   41.36 |
 
 Standard nickel strip used in batteries is 8x0.75mm so 6mm² which gives us 3.12A/mm²
 
 Nickel has higher resistance, I'm not confident in my temp calculations but this is worrysome, I need to validate this experimentally. For now I will proceed with the assumption that I can design good nickel fuses
 
-
+soldering video: https://www.youtube.com/watch?v=cWQWDyBtgTs
 
 * Individual Cell Current
+
+
+* Cabling Structure
+- Building 2 batteries, 3.3kWh each (15-20kg each?)
+- Optionally can run on one battery, so independant systems, each cable can take the full 150A load though
+- Cabling as a part of the battery itself, plugs on the bike.
+
+** Diagram
+#+BEGIN_SRC diagon :mode GraphDAG :exports results
+battery1 -> esc
+battery2 -> esc
+esc -> motor
+#+END_SRC
+#+RESULTS:
+#+begin_example
+┌────────┐┌────────┐
+│battery1││battery2│
+└┬───────┘└┬───────┘
+┌▽─────────▽┐       
+│esc        │       
+└┬──────────┘       
+┌▽────┐             
+│motor│             
+└─────┘             
+
+#+end_example
+
+** Cables
+50mm² cables
+
+** Connectors
+what type of connectors for the battery itself, for the bike?
+
+** Bus bar sizing
+we can go for 75mm²-100mm² just to avoid estimated 70deg heating at peaks within the battery.
+
+20mm x 3-5mm
+or
+30mm x 2-3mm

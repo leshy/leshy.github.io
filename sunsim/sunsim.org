@@ -3,14 +3,14 @@
 #+LANGUAGE: en
 #+AUTHOR: Ivan Nikolic
 #+DATE: [2024-12-02 Mon]
-#+LAST_MODIFIED: [2024-12-18 Wed]
+#+LAST_MODIFIED: [2024-12-21 Sat]
 #+VERSION: v0.1 alpha
 
 * Intro
 I'm building a house, which introduced me to gis and drone mapping so roughly documenting my process here.
 Goal of this has been get a 3d model of the land allowing for sunlight coverage simulation for architecture and solar panel placement.
 
-The below runs in browser, for some reason works great on mobile
+Click below to run the project in the browser, for some reason works great on mobile
 
 [[https://lsh.red/sunsim/][./img/three_double.png]]
 

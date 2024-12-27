@@ -3,7 +3,7 @@
 #+SUBTITLE: Personal site
 #+LANGUAGE: en
 #+DATE: [2024-12-02 Mon]
-#+LAST_MODIFIED: [2024-12-20 Fri]
+#+LAST_MODIFIED: [2024-12-21 Sat]
 #+VERSION: v0.1 alpha
 
 * Intro
@@ -13,7 +13,7 @@
 ** Watering
 [[watering/][./watering/img/watering.webp]]
 
-indoors watering system, distributed sensor networks, data collection
+indoors watering system, distributed sensor networks, data collection, nodemcu
 
 ** Drone mapping, 3D reconstruction
 [[sunsim/][./sunsim/img/bg.jpg]]
