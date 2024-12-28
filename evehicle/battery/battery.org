@@ -5,8 +5,13 @@
 #+DATE: [2024-12-02 Mon]
 #+LAST_MODIFIED: [2024-12-21 Sat]
 
+#+name: header
+#+begin_src emacs-lisp :var tbl="" :exports none
+(cons (car tbl) (cons 'hline (cdr tbl)))
+#+end_src
 
-#+BEGIN_SRC python :results none :exports none :session battcalc
+
+#+BEGIN_SRC python :results none :exports none :session battcalc :numberLines t
 from typing import Dict, List, Union
 
 def compute(known_values: Dict[Symbol, Union[float, np.ndarray]], 
@@ -76,10 +81,10 @@ Collecting data on the individual cells from https://eu.nkon.nl/
 | Samsung INR21700-50S |        3.16 |        5 |         72 |      35 | 21700 |        70.6 |  21.25 |
 | Headway LifePO4      |          15 |   10.000 |        346 |      20 | 38120 |             |        |
 
-* Full battery output/price calculation
-How many cells do I need to go in series to achieve min 3kWh capacity, then calculate max amps, weight etc
+* Full pack performance/price
+How many cells do I need to go in series to achieve > 3kWh capacity, then calculate max amps, weight etc
 
-#+BEGIN_SRC python :var tab=cells :colnames yes :hlines yes :results table :exports both
+#+BEGIN_SRC python :var tab=cells :colnames yes :hlines yes :results table :exports both  :post header(*this*)
 import math
 
 cell_voltage = 4.2
@@ -138,7 +143,7 @@ Max continuous discharge of 150A giving 7.2/8.4kw - 10/12.6kw
 * Thermal performance of the cells
 Since only 8P is used we have high per-cell discharge rate which might cause thermal issues
 
-#+BEGIN_SRC python :results table :session battcalc :exports both
+#+BEGIN_SRC python :results table :session battcalc :exports both :post header(*this*)
 from sympy import Symbol, solve, expand, pi, lambdify
 
 # Base parameters as symbols
@@ -228,30 +233,30 @@ def format_time(x, _=None):
             days = hours/24
             return f'{days:.1f}d'
 
-def calculate_losses(total_current):
-    """Calculate losses for a given current"""
-    subs_dict = {**cell_spec, **pack_spec, **env_spec, current: total_current}
-    heat_per_cell = cell_power_loss.subs(subs_dict)
-    total_heat = pack_power_loss.subs(subs_dict)
-    eff = efficiency.subs(subs_dict)
-    temp_increase = temp_rise.subs(subs_dict)
-    time_to_cutoff = thermal_time.subs(subs_dict)
-    power = pack_power.subs(subs_dict)
-    voltage = pack_voltage.subs(subs_dict)
+# def calculate_losses(total_current):
+#     """Calculate losses for a given current"""
+#     subs_dict = {**cell_spec, **pack_spec, **env_spec, current: total_current}
+#     heat_per_cell = cell_power_loss.subs(subs_dict)
+#     total_heat = pack_power_loss.subs(subs_dict)
+#     eff = efficiency.subs(subs_dict)
+#     temp_increase = temp_rise.subs(subs_dict)
+#     time_to_cutoff = thermal_time.subs(subs_dict)
+#     power = pack_power.subs(subs_dict)
+#     voltage = pack_voltage.subs(subs_dict)
 
-    print(f"At {int(power)}W")
-    print(f"Total current: {total_current}A at {int(voltage)}V")
-    print(f"Current per cell: {total_current/pack_spec[n_parallel]:.2f}A")
-    print(f"Heat generation per cell: {heat_per_cell:.2f}W")
-    print(f"Pack efficiency: {eff:.2f}%")
-    print(f"Estimated temp rise above ambient: {temp_increase:.2f}°C")
-    print(f"Time to reach {cell_spec[thermal_cutoff]}°C (no cooling): {format_time(float(time_to_cutoff))}")
-    print("")
+#     print(f"At {int(power)}W")
+#     print(f"Total current: {total_current}A at {int(voltage)}V")
+#     print(f"Current per cell: {total_current/pack_spec[n_parallel]:.2f}A")
+#     print(f"Heat generation per cell: {heat_per_cell:.2f}W")
+#     print(f"Pack efficiency: {eff:.2f}%")
+#     print(f"Estimated temp rise above ambient: {temp_increase:.2f}°C")
+#     print(f"Time to reach {cell_spec[thermal_cutoff]}°C (no cooling): {format_time(float(time_to_cutoff))}")
+#     print("")
 
     
-# Example usage with different currents
-for test_current in [50, 100, 150]:
-    calculate_losses(test_current)
+# # Example usage with different currents
+# for test_current in [50, 100, 150]:
+#     calculate_losses(test_current)
     
 import numpy as np
 import math
@@ -264,22 +269,24 @@ vals = { **cell_spec, **pack_spec, **env_spec, current: current_range}
 def round_row(*row):
     return [ f"{item:.2f}" for item in row]
 
-headers = ["Current (A)", "Time", "eff (%)", "cell (W)", "pack (W)"]
-rows = compute(vals, [ thermal_time, efficiency, cell_power_loss, temp_rise ])
-rows[0] = map(format_time, rows[0])
-rows[1] = map(int, rows[1])
-rows[2] = map(lambda x: f"{x:.2f}", rows[2])
+headers = ["I (A)", "Out (kW)", "T(overload)", "η (%)", "cell loss (W)", "pack loss (W)"]
+rows = compute(vals, [ pack_power, thermal_time, efficiency, cell_power_loss, temp_rise ])
+rows[0] = map(lambda x: x/1000, rows[0])
+rows[1] = map(format_time, rows[1])
+rows[2] = map(int, rows[2])
 rows[3] = map(lambda x: f"{x:.2f}", rows[3])
+rows[4] = map(lambda x: f"{x:.2f}", rows[4])
 
 [headers, *zip(current_range, *rows)]
 #+END_SRC
 
 #+RESULTS:
-| Current (A) | Time  | eff (%) | cell (W) | pack (W) |
-|        50.0 | 1.2h  |      97 |     0.55 |    10.30 |
-|       100.0 | 19min |      95 |     2.19 |    41.19 |
-|       150.0 | 8min  |      92 |     4.92 |    92.68 |
-|       200.0 | 5min  |      90 |     8.75 |   164.76 |
+| I (A) | Out (kW) | T(overload) | η (%) | cell loss (W) | pack loss (W) |
+|-------+----------+-------------+-------+---------------+---------------|
+|  50.0 |      3.6 | 1.2h        |    97 |          0.55 |         10.30 |
+| 100.0 |      7.2 | 19min       |    95 |          2.19 |         41.19 |
+| 150.0 |     10.8 | 8min        |    92 |          4.92 |         92.68 |
+| 200.0 |     14.4 | 5min        |    90 |          8.75 |        164.76 |
 
 
 #+begin_example
@@ -641,7 +648,7 @@ plt.savefig('cable_losses.svg', dpi=150, bbox_inches='tight', format='svg', tran
 
 Ambient temperature doesn't seem important. We'll analize the system at 60 degrees from now on, 2 meters length.
 
-#+BEGIN_SRC python :results table :exports both :session battcalc :results table
+#+BEGIN_SRC python :results table :exports both :session battcalc :results table :post header(*this*)
 import numpy as np
 
 values = {
@@ -786,7 +793,7 @@ we need to re-do the calculations for the nickel
 #+end_example
 
 ** Loss/temp table for bus bars
-#+BEGIN_SRC python :results table :exports both :session battcalc :results table
+#+BEGIN_SRC python :results table :exports both :session battcalc :results table :post header(*this*)
 import numpy as np
 
 values = {
@@ -812,7 +819,6 @@ for area in np.linspace(10, 60, 6):
 # Return formatted table
 [headers, *rows]
 #+END_SRC
-
 #+RESULTS:
 |   mm² | A/mm² | Diam (mm) | Loss (W) | Loss (%) | ΔT (°C) |
 | 10.00 |  5.60 |      3.57 |     0.73 |     0.02 |  108.77 |
@@ -937,28 +943,99 @@ translate([(-parallel_module_x / 2) + cell_d - cell_distance, -parallel_module_y
 [[file:single_series.png]]
 
 
-wrote a cli for [[https://github.com/leshy/scad-clj-cli][clojure -> openscad compiler]] because we are not barbarians here
+openscad is not sustainable, wrote a cli for [[https://github.com/leshy/scad-clj-cli][clojure -> openscad compiler]] so starting from scratch
 
-#+begin_src scadclj :file cube.png :results file link :exports both :axes t
-(let [cell_height 70.7
-      cell_r 10.625
-      alpha 0.5
-      batteryGreen [0.6 1 0.6 alpha]
-      batterySilver [1 1 1 alpha]
-      ]
+
+#+begin_src scadclj :results none :exports none :session batt
+#+end_src
+
+we define a cell
+
+#+begin_src scadclj :file ./3d/cell.png :results file link :exports code :axes t :session batt
+(def cellSpec
+  (atom {
+         :r 10.625
+         :height 70.7
+         :green [0.6 1 0.6 0.5]
+         :silver [1 1 1 0.5]
+         }))
   
-(def cell
+(def cellObj
   (union
-   (color batteryGreen (cylinder cell_r, cell_height)
-   (translate [0,0,(+ (/ cell_height 2) 1) ]
+   (color (:green @cellSpec) (cylinder (:r @cellSpec), (:height @cellSpec))
+   (translate [0, 0, (+ (/ (:height @cellSpec) 2) 1)]
               (cylinder 5 2)))))
 
-cell)
+cellObj
+#+end_src
+
+** a parallel block
+#+begin_src scadclj :file ./3d/parallel_block.png :results file link :exports both :axes t :session batt :codefile code.clj
+(def parallelSpec
+  (atom {
+         :dist 5
+         :x 4
+         :y 2
+}))
+
+(let [
+      cellD (* (:r @cellSpec) 2)
+      dist (+ cellD (:dist @parallelSpec))
+      centerX (- (/ (* dist (:x @parallelSpec)) 2) (/ dist 2))
+      centerY (- (/ (* dist (:y @parallelSpec)) 2) (/ dist 2))
+      ]
+  
+  (swap! parallelSpec assoc
+         :dimensionX (* dist (:x @parallelSpec))
+         :dimensionY (* dist (:y @parallelSpec)))
+
+  (def parallelObj
+    (translate [ (- centerX), (- centerY), 0 ]
+    (map (fn [x]
+           (map (fn [y]
+                  (translate [ (* dist x) (* dist y) 0 ] cellObj))
+                (range 0 (:y @parallelSpec))))
+         (range 0 (:x @parallelSpec))))))
+
+parallelObj
 #+end_src
 
 #+RESULTS:
-[[file:cube.png]]
+[[file:./3d/parallel_block.png]]
 
+** a full pack
+#+begin_src scadclj :file ./3d/series_block.png :results file link :exports both :axes t :session batt :codefile code.clj
+(def seriesSpec
+  (atom {
+         :dist 10
+         :x 4
+         :y 5
+}))
+
+(let [
+      distX (+ (:dimensionX @parallelSpec) (:dist @seriesSpec))
+      distY (+ (:dimensionY @parallelSpec) (:dist @seriesSpec))
+      centerX (- (/ (* distX (:x @seriesSpec)) 2) (/ distX 2))
+      centerY (- (/ (* distY (:y @seriesSpec)) 2) (/ distY 2))
+      ]
+  
+  (swap! seriesSpec assoc
+         :dimensionX (* distX (:x @parallelSpec))
+         :dimensionY (* distY (:y @parallelSpec)))
+
+  (def seriesObj
+    (translate [ (- centerX), (- centerY), 0 ]
+               (map (fn [x]
+                      (map (fn [y]
+                             (translate [ (* distX x) (* distY y) 0 ] parallelObj))
+                           (range 0 (:y @seriesSpec))))
+                    (range 0 (:x @seriesSpec))))))
+
+seriesObj
+#+end_src
+
+#+RESULTS:
+[[file:./3d/series_block.png]]
 
 ** Unified bus bar?
 Actually from this it seems that a totally flat copper plate is better then bus bars, with potentially holes for cell level fusing.
@@ -1050,6 +1127,7 @@ esc -> motor
 
 ** Cables
 50mm² cables
+**** TODO figure out insulation the material and simulate thermals
 
 ** Connectors
 what type of connectors for the battery itself, for the bike?
