@@ -59,9 +59,8 @@
        <ul class="incremental">
 <li><a href="#cell-selection" id="toc-cell-selection">Cell
 selection</a></li>
-<li><a href="#full-battery-outputprice-calculation"
-id="toc-full-battery-outputprice-calculation">Full battery output/price
-calculation</a></li>
+<li><a href="#full-pack-performanceprice"
+id="toc-full-pack-performanceprice">Full pack performance/price</a></li>
 <li><a href="#thermal-performance-of-the-cells"
 id="toc-thermal-performance-of-the-cells">Thermal performance of the
 cells</a></li>
@@ -80,6 +79,9 @@ bars</a></li>
 <li><a href="#initial-2s8p-model" id="toc-initial-2s8p-model">Initial
 2S8P Model</a>
 <ul class="incremental">
+<li><a href="#a-parallel-block" id="toc-a-parallel-block">a parallel
+block</a></li>
+<li><a href="#a-full-pack" id="toc-a-full-pack">a full pack</a></li>
 <li><a href="#unified-bus-bar" id="toc-unified-bus-bar">Unified bus
 bar?</a></li>
 <li><a href="#cell-level-fusing" id="toc-cell-level-fusing">Cell level
@@ -199,13 +201,14 @@ href="https://eu.nkon.nl/">https://eu.nkon.nl/</a></p>
 </tbody>
 </table>
 </section>
-<section id="full-battery-outputprice-calculation" class="level1">
-<h1>Full battery output/price calculation</h1>
-<p>How many cells do I need to go in series to achieve min 3kWh
+<section id="full-pack-performanceprice" class="level1">
+<h1>Full pack performance/price</h1>
+<p>How many cells do I need to go in series to achieve &gt; 3kWh
 capacity, then calculate max amps, weight etc</p>
 <details><summary> python code block</summary><code><div class="sourceCode" id="cb1" data-var="tab=cells"
 data-colnames="yes" data-hlines="yes" data-results="table"
-data-exports="both"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> math</span>
+data-exports="both" data-post="header(*this*)"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> math</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>cell_voltage <span class="op">=</span> <span class="fl">4.2</span></span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>cell_series <span class="op">=</span> <span class="dv">20</span></span>
@@ -337,8 +340,8 @@ Max continuous discharge of 150A giving 7.2/8.4kw - 10/12.6kw</p>
 <p>Since only 8P is used we have high per-cell discharge rate which
 might cause thermal issues</p>
 <details><summary> python code block</summary><code><div class="sourceCode" id="cb1" data-results="table"
-data-session="battcalc" data-exports="both"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sympy <span class="im">import</span> Symbol, solve, expand, pi, lambdify</span>
+data-session="battcalc" data-exports="both"
+data-post="header(*this*)"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sympy <span class="im">import</span> Symbol, solve, expand, pi, lambdify</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Base parameters as symbols</span></span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Geometric parameters</span></span>
@@ -427,30 +430,30 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a hr
 <span id="cb1-87"><a href="#cb1-87" aria-hidden="true" tabindex="-1"></a>            days <span class="op">=</span> hours<span class="op">/</span><span class="dv">24</span></span>
 <span id="cb1-88"><a href="#cb1-88" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="ss">f&#39;</span><span class="sc">{</span>days<span class="sc">:.1f}</span><span class="ss">d&#39;</span></span>
 <span id="cb1-89"><a href="#cb1-89" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-90"><a href="#cb1-90" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> calculate_losses(total_current):</span>
-<span id="cb1-91"><a href="#cb1-91" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Calculate losses for a given current&quot;&quot;&quot;</span></span>
-<span id="cb1-92"><a href="#cb1-92" aria-hidden="true" tabindex="-1"></a>    subs_dict <span class="op">=</span> {<span class="op">**</span>cell_spec, <span class="op">**</span>pack_spec, <span class="op">**</span>env_spec, current: total_current}</span>
-<span id="cb1-93"><a href="#cb1-93" aria-hidden="true" tabindex="-1"></a>    heat_per_cell <span class="op">=</span> cell_power_loss.subs(subs_dict)</span>
-<span id="cb1-94"><a href="#cb1-94" aria-hidden="true" tabindex="-1"></a>    total_heat <span class="op">=</span> pack_power_loss.subs(subs_dict)</span>
-<span id="cb1-95"><a href="#cb1-95" aria-hidden="true" tabindex="-1"></a>    eff <span class="op">=</span> efficiency.subs(subs_dict)</span>
-<span id="cb1-96"><a href="#cb1-96" aria-hidden="true" tabindex="-1"></a>    temp_increase <span class="op">=</span> temp_rise.subs(subs_dict)</span>
-<span id="cb1-97"><a href="#cb1-97" aria-hidden="true" tabindex="-1"></a>    time_to_cutoff <span class="op">=</span> thermal_time.subs(subs_dict)</span>
-<span id="cb1-98"><a href="#cb1-98" aria-hidden="true" tabindex="-1"></a>    power <span class="op">=</span> pack_power.subs(subs_dict)</span>
-<span id="cb1-99"><a href="#cb1-99" aria-hidden="true" tabindex="-1"></a>    voltage <span class="op">=</span> pack_voltage.subs(subs_dict)</span>
+<span id="cb1-90"><a href="#cb1-90" aria-hidden="true" tabindex="-1"></a><span class="co"># def calculate_losses(total_current):</span></span>
+<span id="cb1-91"><a href="#cb1-91" aria-hidden="true" tabindex="-1"></a><span class="co">#     &quot;&quot;&quot;Calculate losses for a given current&quot;&quot;&quot;</span></span>
+<span id="cb1-92"><a href="#cb1-92" aria-hidden="true" tabindex="-1"></a><span class="co">#     subs_dict = {**cell_spec, **pack_spec, **env_spec, current: total_current}</span></span>
+<span id="cb1-93"><a href="#cb1-93" aria-hidden="true" tabindex="-1"></a><span class="co">#     heat_per_cell = cell_power_loss.subs(subs_dict)</span></span>
+<span id="cb1-94"><a href="#cb1-94" aria-hidden="true" tabindex="-1"></a><span class="co">#     total_heat = pack_power_loss.subs(subs_dict)</span></span>
+<span id="cb1-95"><a href="#cb1-95" aria-hidden="true" tabindex="-1"></a><span class="co">#     eff = efficiency.subs(subs_dict)</span></span>
+<span id="cb1-96"><a href="#cb1-96" aria-hidden="true" tabindex="-1"></a><span class="co">#     temp_increase = temp_rise.subs(subs_dict)</span></span>
+<span id="cb1-97"><a href="#cb1-97" aria-hidden="true" tabindex="-1"></a><span class="co">#     time_to_cutoff = thermal_time.subs(subs_dict)</span></span>
+<span id="cb1-98"><a href="#cb1-98" aria-hidden="true" tabindex="-1"></a><span class="co">#     power = pack_power.subs(subs_dict)</span></span>
+<span id="cb1-99"><a href="#cb1-99" aria-hidden="true" tabindex="-1"></a><span class="co">#     voltage = pack_voltage.subs(subs_dict)</span></span>
 <span id="cb1-100"><a href="#cb1-100" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-101"><a href="#cb1-101" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f&quot;At </span><span class="sc">{</span><span class="bu">int</span>(power)<span class="sc">}</span><span class="ss">W&quot;</span>)</span>
-<span id="cb1-102"><a href="#cb1-102" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f&quot;Total current: </span><span class="sc">{</span>total_current<span class="sc">}</span><span class="ss">A at </span><span class="sc">{</span><span class="bu">int</span>(voltage)<span class="sc">}</span><span class="ss">V&quot;</span>)</span>
-<span id="cb1-103"><a href="#cb1-103" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f&quot;Current per cell: </span><span class="sc">{</span>total_current<span class="op">/</span>pack_spec[n_parallel]<span class="sc">:.2f}</span><span class="ss">A&quot;</span>)</span>
-<span id="cb1-104"><a href="#cb1-104" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f&quot;Heat generation per cell: </span><span class="sc">{</span>heat_per_cell<span class="sc">:.2f}</span><span class="ss">W&quot;</span>)</span>
-<span id="cb1-105"><a href="#cb1-105" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f&quot;Pack efficiency: </span><span class="sc">{</span>eff<span class="sc">:.2f}</span><span class="ss">%&quot;</span>)</span>
-<span id="cb1-106"><a href="#cb1-106" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f&quot;Estimated temp rise above ambient: </span><span class="sc">{</span>temp_increase<span class="sc">:.2f}</span><span class="ss">°C&quot;</span>)</span>
-<span id="cb1-107"><a href="#cb1-107" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f&quot;Time to reach </span><span class="sc">{</span>cell_spec[thermal_cutoff]<span class="sc">}</span><span class="ss">°C (no cooling): </span><span class="sc">{</span>format_time(<span class="bu">float</span>(time_to_cutoff))<span class="sc">}</span><span class="ss">&quot;</span>)</span>
-<span id="cb1-108"><a href="#cb1-108" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">&quot;&quot;</span>)</span>
+<span id="cb1-101"><a href="#cb1-101" aria-hidden="true" tabindex="-1"></a><span class="co">#     print(f&quot;At {int(power)}W&quot;)</span></span>
+<span id="cb1-102"><a href="#cb1-102" aria-hidden="true" tabindex="-1"></a><span class="co">#     print(f&quot;Total current: {total_current}A at {int(voltage)}V&quot;)</span></span>
+<span id="cb1-103"><a href="#cb1-103" aria-hidden="true" tabindex="-1"></a><span class="co">#     print(f&quot;Current per cell: {total_current/pack_spec[n_parallel]:.2f}A&quot;)</span></span>
+<span id="cb1-104"><a href="#cb1-104" aria-hidden="true" tabindex="-1"></a><span class="co">#     print(f&quot;Heat generation per cell: {heat_per_cell:.2f}W&quot;)</span></span>
+<span id="cb1-105"><a href="#cb1-105" aria-hidden="true" tabindex="-1"></a><span class="co">#     print(f&quot;Pack efficiency: {eff:.2f}%&quot;)</span></span>
+<span id="cb1-106"><a href="#cb1-106" aria-hidden="true" tabindex="-1"></a><span class="co">#     print(f&quot;Estimated temp rise above ambient: {temp_increase:.2f}°C&quot;)</span></span>
+<span id="cb1-107"><a href="#cb1-107" aria-hidden="true" tabindex="-1"></a><span class="co">#     print(f&quot;Time to reach {cell_spec[thermal_cutoff]}°C (no cooling): {format_time(float(time_to_cutoff))}&quot;)</span></span>
+<span id="cb1-108"><a href="#cb1-108" aria-hidden="true" tabindex="-1"></a><span class="co">#     print(&quot;&quot;)</span></span>
 <span id="cb1-109"><a href="#cb1-109" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-110"><a href="#cb1-110" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-111"><a href="#cb1-111" aria-hidden="true" tabindex="-1"></a><span class="co"># Example usage with different currents</span></span>
-<span id="cb1-112"><a href="#cb1-112" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> test_current <span class="kw">in</span> [<span class="dv">50</span>, <span class="dv">100</span>, <span class="dv">150</span>]:</span>
-<span id="cb1-113"><a href="#cb1-113" aria-hidden="true" tabindex="-1"></a>    calculate_losses(test_current)</span>
+<span id="cb1-111"><a href="#cb1-111" aria-hidden="true" tabindex="-1"></a><span class="co"># # Example usage with different currents</span></span>
+<span id="cb1-112"><a href="#cb1-112" aria-hidden="true" tabindex="-1"></a><span class="co"># for test_current in [50, 100, 150]:</span></span>
+<span id="cb1-113"><a href="#cb1-113" aria-hidden="true" tabindex="-1"></a><span class="co">#     calculate_losses(test_current)</span></span>
 <span id="cb1-114"><a href="#cb1-114" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-115"><a href="#cb1-115" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
 <span id="cb1-116"><a href="#cb1-116" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> math</span>
@@ -463,46 +466,54 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a hr
 <span id="cb1-123"><a href="#cb1-123" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> round_row(<span class="op">*</span>row):</span>
 <span id="cb1-124"><a href="#cb1-124" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> [ <span class="ss">f&quot;</span><span class="sc">{</span>item<span class="sc">:.2f}</span><span class="ss">&quot;</span> <span class="cf">for</span> item <span class="kw">in</span> row]</span>
 <span id="cb1-125"><a href="#cb1-125" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-126"><a href="#cb1-126" aria-hidden="true" tabindex="-1"></a>headers <span class="op">=</span> [<span class="st">&quot;Current (A)&quot;</span>, <span class="st">&quot;Time&quot;</span>, <span class="st">&quot;eff (%)&quot;</span>, <span class="st">&quot;cell (W)&quot;</span>, <span class="st">&quot;pack (W)&quot;</span>]</span>
-<span id="cb1-127"><a href="#cb1-127" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> compute(vals, [ thermal_time, efficiency, cell_power_loss, temp_rise ])</span>
-<span id="cb1-128"><a href="#cb1-128" aria-hidden="true" tabindex="-1"></a>rows[<span class="dv">0</span>] <span class="op">=</span> <span class="bu">map</span>(format_time, rows[<span class="dv">0</span>])</span>
-<span id="cb1-129"><a href="#cb1-129" aria-hidden="true" tabindex="-1"></a>rows[<span class="dv">1</span>] <span class="op">=</span> <span class="bu">map</span>(<span class="bu">int</span>, rows[<span class="dv">1</span>])</span>
-<span id="cb1-130"><a href="#cb1-130" aria-hidden="true" tabindex="-1"></a>rows[<span class="dv">2</span>] <span class="op">=</span> <span class="bu">map</span>(<span class="kw">lambda</span> x: <span class="ss">f&quot;</span><span class="sc">{</span>x<span class="sc">:.2f}</span><span class="ss">&quot;</span>, rows[<span class="dv">2</span>])</span>
+<span id="cb1-126"><a href="#cb1-126" aria-hidden="true" tabindex="-1"></a>headers <span class="op">=</span> [<span class="st">&quot;I (A)&quot;</span>, <span class="st">&quot;Out (kW)&quot;</span>, <span class="st">&quot;T(overload)&quot;</span>, <span class="st">&quot;η (%)&quot;</span>, <span class="st">&quot;cell loss (W)&quot;</span>, <span class="st">&quot;pack loss (W)&quot;</span>]</span>
+<span id="cb1-127"><a href="#cb1-127" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> compute(vals, [ pack_power, thermal_time, efficiency, cell_power_loss, temp_rise ])</span>
+<span id="cb1-128"><a href="#cb1-128" aria-hidden="true" tabindex="-1"></a>rows[<span class="dv">0</span>] <span class="op">=</span> <span class="bu">map</span>(<span class="kw">lambda</span> x: x<span class="op">/</span><span class="dv">1000</span>, rows[<span class="dv">0</span>])</span>
+<span id="cb1-129"><a href="#cb1-129" aria-hidden="true" tabindex="-1"></a>rows[<span class="dv">1</span>] <span class="op">=</span> <span class="bu">map</span>(format_time, rows[<span class="dv">1</span>])</span>
+<span id="cb1-130"><a href="#cb1-130" aria-hidden="true" tabindex="-1"></a>rows[<span class="dv">2</span>] <span class="op">=</span> <span class="bu">map</span>(<span class="bu">int</span>, rows[<span class="dv">2</span>])</span>
 <span id="cb1-131"><a href="#cb1-131" aria-hidden="true" tabindex="-1"></a>rows[<span class="dv">3</span>] <span class="op">=</span> <span class="bu">map</span>(<span class="kw">lambda</span> x: <span class="ss">f&quot;</span><span class="sc">{</span>x<span class="sc">:.2f}</span><span class="ss">&quot;</span>, rows[<span class="dv">3</span>])</span>
-<span id="cb1-132"><a href="#cb1-132" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-133"><a href="#cb1-133" aria-hidden="true" tabindex="-1"></a>[headers, <span class="op">*</span><span class="bu">zip</span>(current_range, <span class="op">*</span>rows)]</span></code></pre></div></code></details>
+<span id="cb1-132"><a href="#cb1-132" aria-hidden="true" tabindex="-1"></a>rows[<span class="dv">4</span>] <span class="op">=</span> <span class="bu">map</span>(<span class="kw">lambda</span> x: <span class="ss">f&quot;</span><span class="sc">{</span>x<span class="sc">:.2f}</span><span class="ss">&quot;</span>, rows[<span class="dv">4</span>])</span>
+<span id="cb1-133"><a href="#cb1-133" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-134"><a href="#cb1-134" aria-hidden="true" tabindex="-1"></a>[headers, <span class="op">*</span><span class="bu">zip</span>(current_range, <span class="op">*</span>rows)]</span></code></pre></div></code></details>
 <table>
+<thead>
+<tr class="header">
+<th>I (A)</th>
+<th>Out (kW)</th>
+<th>T(overload)</th>
+<th>η (%)</th>
+<th>cell loss (W)</th>
+<th>pack loss (W)</th>
+</tr>
+</thead>
 <tbody>
 <tr class="odd">
-<td>Current (A)</td>
-<td>Time</td>
-<td>eff (%)</td>
-<td>cell (W)</td>
-<td>pack (W)</td>
-</tr>
-<tr class="even">
 <td>50.0</td>
+<td>3.6</td>
 <td>1.2h</td>
 <td>97</td>
 <td>0.55</td>
 <td>10.30</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>100.0</td>
+<td>7.2</td>
 <td>19min</td>
 <td>95</td>
 <td>2.19</td>
 <td>41.19</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>150.0</td>
+<td>10.8</td>
 <td>8min</td>
 <td>92</td>
 <td>4.92</td>
 <td>92.68</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>200.0</td>
+<td>14.4</td>
 <td>5min</td>
 <td>90</td>
 <td>8.75</td>
@@ -869,8 +880,8 @@ data-session="battcalc"><pre class="sourceCode python"><code class="sourceCode p
 <p>Ambient temperature doesn't seem important. We'll analize the system
 at 60 degrees from now on, 2 meters length.</p>
 <details><summary> python code block</summary><code><div class="sourceCode" id="cb1" data-results="table"
-data-exports="both" data-session="battcalc"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+data-exports="both" data-session="battcalc"
+data-post="header(*this*)"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>values <span class="op">=</span> {</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">**</span>material_copper,</span>
@@ -1062,8 +1073,8 @@ terminals (investigate plastic screws?)</p>
 <section id="losstemp-table-for-bus-bars" class="level2">
 <h2>Loss/temp table for bus bars</h2>
 <details><summary> python code block</summary><code><div class="sourceCode" id="cb1" data-results="table"
-data-exports="both" data-session="battcalc"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+data-exports="both" data-session="battcalc"
+data-post="header(*this*)"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>values <span class="op">=</span> {</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">**</span>material_copper,</span>
@@ -1260,26 +1271,96 @@ translate([(-parallel_module_x / 2) + cell_d - cell_distance, -parallel_module_y
 //parallel_module();
 </code></pre></code></details>
 <p><img src="single_series.png" /></p>
-<p>wrote a cli for <a
+<p>openscad is not sustainable, wrote a cli for <a
 href="https://github.com/leshy/scad-clj-cli">clojure -&gt; openscad
-compiler</a> because we are not barbarians here</p>
-<details><summary> scadclj code block</summary><code><pre class="scadclj" data-file="cube.png" data-results="file link"
-data-exports="both" data-axes="t"><code>(let [cell_height 70.7
-      cell_r 10.625
-      alpha 0.5
-      batteryGreen [0.6 1 0.6 alpha]
-      batterySilver [1 1 1 alpha]
-      ]
-
-(def cell
-  (union
-   (color batteryGreen (cylinder cell_r, cell_height)
-   (translate [0,0,(+ (/ cell_height 2) 1) ]
-              (cylinder 5 2)))))
-
-cell)
-</code></pre></code></details>
-<p><img src="cube.png" /></p>
+compiler</a> so starting from scratch</p>
+<p>we define a cell</p>
+<details><summary> clojure code block</summary><code><div class="sourceCode" id="cb1" data-file="./3d/cell.png"
+data-results="file link" data-exports="code" data-axes="t"
+data-session="batt"><pre class="sourceCode clojure"><code class="sourceCode clojure"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>(<span class="bu">def</span><span class="fu"> cellSpec</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  (<span class="kw">atom</span> {</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">:r</span> <span class="fl">10.625</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>         <span class="at">:height</span> <span class="fl">70.7</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>         <span class="at">:green</span> [<span class="fl">0.6</span> <span class="dv">1</span> <span class="fl">0.6</span> <span class="fl">0.5</span>]</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>         <span class="at">:silver</span> [<span class="dv">1</span> <span class="dv">1</span> <span class="dv">1</span> <span class="fl">0.5</span>]</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>         }))</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>(<span class="bu">def</span><span class="fu"> cellObj</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  (<span class="kw">union</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>   (color (<span class="at">:green</span> <span class="at">@cellSpec</span>) (cylinder (<span class="at">:r</span> <span class="at">@cellSpec</span>), (<span class="at">:height</span> <span class="at">@cellSpec</span>))</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>   (translate [<span class="dv">0</span>, <span class="dv">0</span>, (<span class="kw">+</span> (<span class="kw">/</span> (<span class="at">:height</span> <span class="at">@cellSpec</span>) <span class="dv">2</span>) <span class="dv">1</span>)]</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>              (cylinder <span class="dv">5</span> <span class="dv">2</span>)))))</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="co">; function to repeat some object on X and Y dimensions, used later</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>(<span class="bu">defn</span><span class="fu"> spread </span>[xn yn xDist yDist xSize ySize obj updateSpec]</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>  (<span class="kw">let</span> [</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>        distX (<span class="kw">+</span> xSize xDist)</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>        distY (<span class="kw">+</span> ySize yDist)</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>        centerX (<span class="kw">-</span> (<span class="kw">/</span> (<span class="kw">*</span> distX xn) <span class="dv">2</span>) (<span class="kw">/</span> distX <span class="dv">2</span>))</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>        centerY (<span class="kw">-</span> (<span class="kw">/</span> (<span class="kw">*</span> distY yn) <span class="dv">2</span>) (<span class="kw">/</span> distY <span class="dv">2</span>))</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>        ]</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>    (<span class="kw">swap!</span> updateSpec <span class="kw">assoc</span></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>           <span class="at">:dimensionX</span> (<span class="kw">*</span> distX xn)</span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>           <span class="at">:dimensionY</span> (<span class="kw">*</span> distY yn))</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>    (translate</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>     [ (<span class="kw">-</span> centerX), (<span class="kw">-</span> centerY), <span class="dv">0</span> ]</span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>     (<span class="kw">map</span> (<span class="kw">fn</span> [x]</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>            (<span class="kw">map</span> (<span class="kw">fn</span> [y]</span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>                   (translate [ (<span class="kw">*</span> distX x) (<span class="kw">*</span> distY y) <span class="dv">0</span> ] obj))</span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>                 (<span class="kw">range</span> <span class="dv">0</span> yn)))</span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>          (<span class="kw">range</span> <span class="dv">0</span> xn)))))</span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>cellObj</span></code></pre></div></code></details>
+<section id="a-parallel-block" class="level2">
+<h2>a parallel block</h2>
+<details><summary> clojure code block</summary><code><div class="sourceCode" id="cb1" data-file="./3d/parallel_block.png"
+data-results="file link" data-exports="both" data-axes="t"
+data-session="batt" data-codefile="code.clj"><pre
+class="sourceCode clojure"><code class="sourceCode clojure"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>(<span class="bu">def</span><span class="fu"> parallelSpec</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  (<span class="kw">atom</span> { <span class="at">:dist</span> <span class="dv">5</span> <span class="at">:x</span> <span class="dv">4</span> <span class="at">:y</span> <span class="dv">2</span> }))</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>(<span class="bu">def</span><span class="fu"> parallelObj</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  (spread</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>   (<span class="at">:x</span> <span class="at">@parallelSpec</span>)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>   (<span class="at">:y</span> <span class="at">@parallelSpec</span>)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>   (<span class="at">:dist</span> <span class="at">@parallelSpec</span>)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>   (<span class="at">:dist</span> <span class="at">@parallelSpec</span>)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>   (<span class="kw">*</span> <span class="dv">2</span> (<span class="at">:r</span> <span class="at">@cellSpec</span>))</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>   (<span class="kw">*</span> <span class="dv">2</span> (<span class="at">:r</span> <span class="at">@cellSpec</span>))</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>   cellObj</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>   parallelSpec</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>   ))</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>parallelObj</span></code></pre></div></code></details>
+<p><img src="./3d/parallel_block.png" /></p>
+</section>
+<section id="a-full-pack" class="level2">
+<h2>a full pack</h2>
+<details><summary> clojure code block</summary><code><div class="sourceCode" id="cb1" data-file="./3d/series_block.png"
+data-results="file link" data-exports="both" data-axes="t"
+data-session="batt" data-codefile="code.clj"><pre
+class="sourceCode clojure"><code class="sourceCode clojure"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>(<span class="bu">def</span><span class="fu"> seriesSpec</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  (<span class="kw">atom</span> { <span class="at">:dist</span> <span class="dv">10</span> <span class="at">:x</span> <span class="dv">4</span> <span class="at">:y</span> <span class="dv">5</span> }))</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>(<span class="bu">def</span><span class="fu"> seriesObj</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  (spread</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>   (<span class="at">:x</span> <span class="at">@seriesSpec</span>)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>   (<span class="at">:y</span> <span class="at">@seriesSpec</span>)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>   (<span class="at">:dist</span> <span class="at">@seriesSpec</span>)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>   (<span class="at">:dist</span> <span class="at">@seriesSpec</span>)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>   (<span class="at">:dimensionX</span> <span class="at">@parallelSpec</span>)</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>   (<span class="at">:dimensionY</span> <span class="at">@parallelSpec</span>)</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>   parallelObj</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>   seriesSpec</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>   ))</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>seriesObj</span></code></pre></div></code></details>
+<p><img src="./3d/series_block.png" /></p>
+</section>
 <section id="unified-bus-bar" class="level2">
 <h2>Unified bus bar?</h2>
 <p>Actually from this it seems that a totally flat copper plate is
@@ -1433,6 +1514,8 @@ cable can take the full 150A load though<br />
 <section id="cables" class="level2">
 <h2>Cables</h2>
 <p>50mm² cables</p>
+<p><span class="todo TODO">TODO</span> figure out insulation the
+material and simulate thermals</p>
 </section>
 <section id="connectors" class="level2">
 <h2>Connectors</h2>

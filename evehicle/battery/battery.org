@@ -966,36 +966,48 @@ we define a cell
    (translate [0, 0, (+ (/ (:height @cellSpec) 2) 1)]
               (cylinder 5 2)))))
 
+
+; function to repeat some object on X and Y dimensions, used later
+(defn spread [xn yn xDist yDist xSize ySize obj updateSpec]
+
+  (let [
+        distX (+ xSize xDist)
+        distY (+ ySize yDist)
+        centerX (- (/ (* distX xn) 2) (/ distX 2))
+        centerY (- (/ (* distY yn) 2) (/ distY 2))
+        ]
+  
+    (swap! updateSpec assoc
+           :dimensionX (* distX xn)
+           :dimensionY (* distY yn))
+
+    (translate
+     [ (- centerX), (- centerY), 0 ]
+     (map (fn [x]
+            (map (fn [y]
+                   (translate [ (* distX x) (* distY y) 0 ] obj))
+                 (range 0 yn)))
+          (range 0 xn)))))
+
 cellObj
 #+end_src
 
 ** a parallel block
 #+begin_src scadclj :file ./3d/parallel_block.png :results file link :exports both :axes t :session batt :codefile code.clj
 (def parallelSpec
-  (atom {
-         :dist 5
-         :x 4
-         :y 2
-}))
+  (atom { :dist 5 :x 4 :y 2 }))
 
-(let [
-      cellD (* (:r @cellSpec) 2)
-      dist (+ cellD (:dist @parallelSpec))
-      centerX (- (/ (* dist (:x @parallelSpec)) 2) (/ dist 2))
-      centerY (- (/ (* dist (:y @parallelSpec)) 2) (/ dist 2))
-      ]
-  
-  (swap! parallelSpec assoc
-         :dimensionX (* dist (:x @parallelSpec))
-         :dimensionY (* dist (:y @parallelSpec)))
-
-  (def parallelObj
-    (translate [ (- centerX), (- centerY), 0 ]
-    (map (fn [x]
-           (map (fn [y]
-                  (translate [ (* dist x) (* dist y) 0 ] cellObj))
-                (range 0 (:y @parallelSpec))))
-         (range 0 (:x @parallelSpec))))))
+(def parallelObj
+  (spread
+   (:x @parallelSpec)
+   (:y @parallelSpec)
+   (:dist @parallelSpec)
+   (:dist @parallelSpec)
+   (* 2 (:r @cellSpec))
+   (* 2 (:r @cellSpec))
+   cellObj
+   parallelSpec
+   ))
 
 parallelObj
 #+end_src
@@ -1006,30 +1018,19 @@ parallelObj
 ** a full pack
 #+begin_src scadclj :file ./3d/series_block.png :results file link :exports both :axes t :session batt :codefile code.clj
 (def seriesSpec
-  (atom {
-         :dist 10
-         :x 4
-         :y 5
-}))
+  (atom { :dist 10 :x 4 :y 5 }))
 
-(let [
-      distX (+ (:dimensionX @parallelSpec) (:dist @seriesSpec))
-      distY (+ (:dimensionY @parallelSpec) (:dist @seriesSpec))
-      centerX (- (/ (* distX (:x @seriesSpec)) 2) (/ distX 2))
-      centerY (- (/ (* distY (:y @seriesSpec)) 2) (/ distY 2))
-      ]
-  
-  (swap! seriesSpec assoc
-         :dimensionX (* distX (:x @parallelSpec))
-         :dimensionY (* distY (:y @parallelSpec)))
-
-  (def seriesObj
-    (translate [ (- centerX), (- centerY), 0 ]
-               (map (fn [x]
-                      (map (fn [y]
-                             (translate [ (* distX x) (* distY y) 0 ] parallelObj))
-                           (range 0 (:y @seriesSpec))))
-                    (range 0 (:x @seriesSpec))))))
+(def seriesObj
+  (spread
+   (:x @seriesSpec)
+   (:y @seriesSpec)
+   (:dist @seriesSpec)
+   (:dist @seriesSpec)
+   (:dimensionX @parallelSpec)
+   (:dimensionY @parallelSpec)
+   parallelObj
+   seriesSpec
+   ))
 
 seriesObj
 #+end_src
