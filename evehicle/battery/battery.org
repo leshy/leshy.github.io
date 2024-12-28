@@ -960,7 +960,7 @@ we define a cell
          :silver [1 1 1 0.5]
          }))
   
-(def cellObj
+(def cellScad
   (union
    (color (:green @cellSpec) (cylinder (:r @cellSpec), (:height @cellSpec))
    (translate [0, 0, (+ (/ (:height @cellSpec) 2) 1)]
@@ -968,7 +968,7 @@ we define a cell
 
 
 ; function to repeat some object on X and Y dimensions, used later
-(defn spread [xn yn xDist yDist xSize ySize obj updateSpec]
+(defn spread [xn yn xDist yDist xSize ySize obj]
 
   (let [
         distX (+ xSize xDist)
@@ -976,10 +976,6 @@ we define a cell
         centerX (- (/ (* distX xn) 2) (/ distX 2))
         centerY (- (/ (* distY yn) 2) (/ distY 2))
         ]
-  
-    (swap! updateSpec assoc
-           :dimensionX (* distX xn)
-           :dimensionY (* distY yn))
 
     (translate
      [ (- centerX), (- centerY), 0 ]
@@ -989,27 +985,34 @@ we define a cell
                  (range 0 yn)))
           (range 0 xn)))))
 
-cellObj
+(defn spreadObject [xn yn xDist yDist obj]
+  (->Obj
+   (* (+ xDist (:dimX obj)) xn)
+   (* (+ yDist (:dimY obj)) yn)
+   (spread xn yn xDist yDist (:dimX obj) (:dimY obj) (:obj obj))))
+
+
+(defrecord Obj [dimX dimY obj])
+
+(let [r 10.625 d (* r 2) height 70.7 green [0.6 1 0.6 0.5]]
+  (def cellObj (->Obj d d
+                      (union
+                       (color green (cylinder r, height)
+                              (translate [0, 0, (+ (/ height 2) 1)] (cylinder 5 2)))))))
+
+
+  
+(:obj cellObj)
 #+end_src
+
+#+RESULTS:
+[[file:./3d/cell.png]]
 
 ** a parallel block
 #+begin_src scadclj :file ./3d/parallel_block.png :results file link :exports both :axes t :session batt :codefile code.clj
-(def parallelSpec
-  (atom { :dist 5 :x 4 :y 2 }))
-
-(def parallelObj
-  (spread
-   (:x @parallelSpec)
-   (:y @parallelSpec)
-   (:dist @parallelSpec)
-   (:dist @parallelSpec)
-   (* 2 (:r @cellSpec))
-   (* 2 (:r @cellSpec))
-   cellObj
-   parallelSpec
-   ))
-
-parallelObj
+(let [ dist 5 x 4 y 2 ]
+  (def parallelObj (spreadObject x y dist dist cellObj)))
+(:obj parallelObj)
 #+end_src
 
 #+RESULTS:
@@ -1017,22 +1020,10 @@ parallelObj
 
 ** a full pack
 #+begin_src scadclj :file ./3d/series_block.png :results file link :exports both :axes t :session batt :codefile code.clj
-(def seriesSpec
-  (atom { :dist 10 :x 4 :y 5 }))
+(let [ dist 10 x 4 y 5 ]
+  (def seriesObj (spreadObject x y dist dist parallelObj)))
 
-(def seriesObj
-  (spread
-   (:x @seriesSpec)
-   (:y @seriesSpec)
-   (:dist @seriesSpec)
-   (:dist @seriesSpec)
-   (:dimensionX @parallelSpec)
-   (:dimensionY @parallelSpec)
-   parallelObj
-   seriesSpec
-   ))
-
-seriesObj
+(:obj seriesObj)
 #+end_src
 
 #+RESULTS:
