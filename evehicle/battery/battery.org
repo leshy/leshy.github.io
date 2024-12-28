@@ -952,55 +952,38 @@ openscad is not sustainable, wrote a cli for [[https://github.com/leshy/scad-clj
 we define a cell
 
 #+begin_src scadclj :file ./3d/cell.png :results file link :exports code :axes t :session batt
-(def cellSpec
-  (atom {
-         :r 10.625
-         :height 70.7
-         :green [0.6 1 0.6 0.5]
-         :silver [1 1 1 0.5]
-         }))
-  
-(def cellScad
-  (union
-   (color (:green @cellSpec) (cylinder (:r @cellSpec), (:height @cellSpec))
-   (translate [0, 0, (+ (/ (:height @cellSpec) 2) 1)]
-              (cylinder 5 2)))))
 
+(def cellSpec (atom { :r 10.625 :height 70.7 }))
+(swap! cellSpec assoc :d (* (:r @cellSpec) 2))
 
-; function to repeat some object on X and Y dimensions, used later
-(defn spread [xn yn xDist yDist xSize ySize obj]
-
-  (let [
-        distX (+ xSize xDist)
-        distY (+ ySize yDist)
-        centerX (- (/ (* distX xn) 2) (/ distX 2))
-        centerY (- (/ (* distY yn) 2) (/ distY 2))
-        ]
-
-    (translate
-     [ (- centerX), (- centerY), 0 ]
-     (map (fn [x]
-            (map (fn [y]
-                   (translate [ (* distX x) (* distY y) 0 ] obj))
-                 (range 0 yn)))
-          (range 0 xn)))))
-
-(defn spreadObject [xn yn xDist yDist obj]
-  (->Obj
-   (* (+ xDist (:dimX obj)) xn)
-   (* (+ yDist (:dimY obj)) yn)
-   (spread xn yn xDist yDist (:dimX obj) (:dimY obj) (:obj obj))))
-
-
+; all our objects know their own dimensions
+; (so that we can build auto-stacking functions)
 (defrecord Obj [dimX dimY obj])
 
-(let [r 10.625 d (* r 2) height 70.7 green [0.6 1 0.6 0.5]]
-  (def cellObj (->Obj d d
-                      (union
-                       (color green (cylinder r, height)
-                              (translate [0, 0, (+ (/ height 2) 1)] (cylinder 5 2)))))))
+(let [r (:r @cellSpec) d (* r 2) height (:height @cellSpec) green [0.6 1 0.6 0.5]]
+  (def cellObj
+    (->Obj d d
+        (union (color green (cylinder r, height)
+        (translate [0, 0, (+ (/ height 2) 1)] (cylinder 5 2)))))))
 
+; function to stack some object on X and Y dimensions, used later
+(defn spreadObject [xn yn xSpacing ySpacing obj]
+  (let [
+        xDist (+ (:dimX obj) xSpacing)
+        yDist (+ (:dimY obj) ySpacing)
+        centerX (- (/ (* xDist xn) 2) (/ xDist 2))
+        centerY (- (/ (* yDist yn) 2) (/ yDist 2))
+        ]
 
+  (->Obj
+   (* (+ xSpacing (:dimX obj)) xn)
+   (* (+ ySpacing (:dimY obj)) yn)
+   (translate [ (- centerX), (- centerY), 0 ]
+   (map (fn [x]
+          (map (fn [y]
+                 (translate [ (* xDist x) (* yDist y) 0 ] (:obj obj)))
+               (range 0 yn)))
+        (range 0 xn))))))
   
 (:obj cellObj)
 #+end_src
@@ -1011,12 +994,17 @@ we define a cell
 ** a parallel block
 #+begin_src scadclj :file ./3d/parallel_block.png :results file link :exports both :axes t :session batt :codefile code.clj
 (let [ dist 5 x 4 y 2 ]
-  (def parallelObj (spreadObject x y dist dist cellObj)))
+  ; need to repeat objects while matching cell positions,
+  ; will be used for bus bar for example
+  (defn parallelObjf [cellObj] (spreadObject x y dist dist cellObj)))
+
+(def parallelObj (parallelObjf cellObj))
 (:obj parallelObj)
 #+end_src
 
 #+RESULTS:
 [[file:./3d/parallel_block.png]]
+
 
 ** a full pack
 #+begin_src scadclj :file ./3d/series_block.png :results file link :exports both :axes t :session batt :codefile code.clj
@@ -1028,6 +1016,53 @@ we define a cell
 
 #+RESULTS:
 [[file:./3d/series_block.png]]
+
+
+** single series pair
+#+begin_src scadclj :file ./3d/busbar1.png :results file link :exports both :axes t :session batt :codefile code.clj :camera 0,0,0,90,0,0,300
+(let [
+      busBarThicc 3
+      busBarSpace -2
+      busBarDist 4
+      dist 10
+      moveDist (/ (+ dist (:dimY parallelObj)) 2)
+      dimX (:dimX parallelObj)
+      dimY (+ (* (:dimY parallelObj) 2) dist)
+      ]
+
+  (defn pairObj [obj] (->Obj dimX dimY
+  (union 
+   (translate [0 moveDist 0] (:obj obj))
+   (rotate [0 Math/PI 0]
+          (translate [0 (* moveDist -1) 0] (:obj obj))))))
+
+  (def singleCutter
+    (->Obj (:dimX cellObj) (:dimY cellObj) (cylinder (+ (/ (:dimX cellObj) 2) busBarSpace), (+ busBarThicc 2))))
+
+  (def busBarCutter (pairObj (parallelObjf singleCutter)))
+
+  (def busBar (translate
+               [0 0 (+ (/ (:height @cellSpec) 2) (+ (/ busBarThicc 2) busBarDist))]
+               (difference
+                (cube (:dimX busBarCutter) (:dimY busBarCutter) busBarThicc)
+                (:obj busBarCutter)))))
+
+(defn rescaleColor [r g b a] [(/ r 255) (/ g 255) (/ b 255) a])
+
+(def busbarCombo (union (color (rescaleColor 255 186 122 1) busBar) (:obj (pairObj parallelObj))))
+
+busbarCombo
+#+end_src
+
+#+RESULTS:
+[[file:./3d/busbar1.png]]
+
+#+begin_src scadclj :file ./3d/busbar2.png :results file link :exports both :axes t :session batt :codefile code.clj :camera 0,0,0,67.5,0,45,300
+busbarCombo
+#+end_src
+
+#+RESULTS:
+[[file:./3d/busbar2.png]]
 
 ** Unified bus bar?
 Actually from this it seems that a totally flat copper plate is better then bus bars, with potentially holes for cell level fusing.
