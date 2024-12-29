@@ -828,8 +828,12 @@ for area in np.linspace(10, 60, 6):
 | 50.00 |  1.12 |      7.98 |     0.15 |     0.00 |    9.73 |
 | 60.00 |  0.93 |      8.74 |     0.12 |     0.00 |    7.40 |
 
-* Initial 2S8P Model
+* Initial Model
+** 2S8P
 Modelling two parallel blocks with 20x3 mm bus bars
+
+_turns out openscad is not sustainable, wrote a cli for [[https://github.com/leshy/scad-clj-cli][clojure -> openscad compiler]] so starting from scratch_
+
 # :camera 0,0,0,45,0,45,400
 #+begin_src openscad :file single_series.png :results file link :exports both :axes t
 cell_height = 70.7;
@@ -942,30 +946,36 @@ translate([(-parallel_module_x / 2) + cell_d - cell_distance, -parallel_module_y
 #+RESULTS:
 [[file:single_series.png]]
 
-
-openscad is not sustainable, wrote a cli for [[https://github.com/leshy/scad-clj-cli][clojure -> openscad compiler]] so starting from scratch
-
-
 ** Unified bus bar?
 Actually from this it seems that a totally flat copper plate is better then bus bars, with potentially holes for cell level fusing.
 
 Covering the tops without protruding around the cells would make the plate 80mm wide, 80x2mm makes a bar that causes almost no heating at 150A
 
-Some pros seem to have reached the same conclusions
+Some pros seem to have reached the same conclusions:
 
-_Note that here bus bar is not in contact with actual cells, likely to eliminate vibration of the plate damaging battery insulation_
+[[./img/pro-battery.png]]
+
+_Note that here bus bar is not in contact with actual cells, likely to eliminate vibration of the plate damaging battery insulation, seems like a good idea_
 
 
-* Starting with scad-clj
-we define a cell
-
-#+begin_src scadclj :exports code :axes t :session batt
+* Clojure Models
+We define some 3d manipulation functions and test them by building a rough cell positioning for a full pack
+#+view: ./3d/pack.png 0,0,0,45,0,45,1400
+#+begin_src scadclj :exports both :axes t :session batt
 ; all our objects know their own dimensions
 ; (so that we can build auto-stacking functions)
 (defrecord Obj [dims obj])
 
+; individual samsung cell dimensions
 (def cellSpec (atom { :r 10.625 :height 70.7 }))
 (swap! cellSpec assoc :d (* (:r @cellSpec) 2))
+
+; individual parallel group stacking settings (8P)
+(def cellGroupSpec (atom { :xn 4 :yn 2 :space 5 }))
+
+; full battery pack stacking settings (20S8P)
+(def packSpec (atom { :xn 4 :yn 5 :space 20 }))
+
 
 (let [r (:r @cellSpec) d (* r 2) height (:height @cellSpec) green [0.6 1 0.6 0.5]]
   (def cellObj
@@ -973,15 +983,19 @@ we define a cell
         (union (color green (cylinder r, height)
         (translate [0, 0, (+ (/ height 2) 1)] (cylinder 5 2)))))))
 
-(:obj cellObj)
-#+end_src
+; basic ops so we don't need to destructure our Obj record
+
+(defn flipObj [obj] (->Obj (:dims obj) (rotate [0 Math/PI 0] (:obj obj))))
+(defn translateObj [obj vector] (->Obj (:dims obj) (translate vector (:obj obj))))
+
+(defn unionObj [objs]
+  (->Obj (:dims (first objs))
+         (apply union (map :obj objs))))
 
 
-#+view: ./3d/pair1.png
-#+view: ./3d/pair2.png 0,0,0,0,0,90,300
-#+view: ./3d/pair3.png 0,0,0,90,0,0,300
-#+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
-(defn addPair [dimension distance obj1 obj2]
+; object stacking functions
+
+(defn pairObj [dimension distance obj1 obj2]
   ;(println "// Input objects dims:" (:dims obj1) (:dims obj2))
   ; First calculate total dims
   (let [distance-vec (mapv #(if (zero? %) 0 (* % distance)) dimension)
@@ -1012,35 +1026,65 @@ we define a cell
         obj2-trans (translate (mapv - obj2-offset) (:obj obj2))]
     
     (->Obj total-dims (union obj1-trans obj2-trans))))
+; color helpers
+(defn hex-to-rgb
+  "Convert a hex color string (e.g., \"#adf7f6\") to a normalized RGB vector [r g b]
+   where each component is normalized to [0, 1]"
+  [hex-str]
+  (let [hex (if (= (first hex-str) \#)
+              (subs hex-str 1)
+              hex-str)
+        rgb-int (Integer/parseInt hex 16)
+        r (bit-shift-right (bit-and rgb-int 0xFF0000) 16)
+        g (bit-shift-right (bit-and rgb-int 0x00FF00) 8)
+        b (bit-and rgb-int 0x0000FF)]
+    [(/ r 255.0) (/ g 255.0) (/ b 255.0)]))
 
-(defn repeatObj [dimension distance objs]
-  (reduce (fn [acc obj] (addPair dimension distance acc obj)) (first objs) (rest objs)))
+;; Example usage:
+(hex-to-rgb "#adf7f6")  
+;; => [0.6784313725490196 0.9686274509803922 0.9647058823529412]
 
-(defn flipObj [obj] (->Obj (:dims obj) (rotate [0 Math/PI 0] (:obj obj))))
+;; Test with some common colors
+(hex-to-rgb "#000000")  ;; => [0.0 0.0 0.0]
+(hex-to-rgb "#ffffff")  ;; => [1.0 1.0 1.0]
+(hex-to-rgb "#ff0000")  ;; => [1.0 0.0 0.0]
 
-(defn unionObj [obj1 obj2] (->Obj (:dims obj1) (union (:obj obj1) (:obj obj2))))
+;(def testObj1 (->Obj [25 25 25] (color [1 0 0] (cube 25 25 25))))
+;(def testObj2 (->Obj [10 10 10] (color [0 1 0] (cube 10 10 10))))
 
-
-(def testObj1 (->Obj [25 25 25] (color [1 0 0] (cube 25 25 25))))
-(def testObj2 (->Obj [10 10 10] (color [0 1 0] (cube 10 10 10))))
-
-;(:obj (addPair [0 0 1] 10 testObj1 testObj2))
+;(:obj (pairObj [0 0 1] 10 testObj1 testObj2))
 ;(defn objF [] testObj2)
 ;(:obj (repeatObj [0 0 1] 10 [testObj2 testObj1 testObj2]))
+(defn repeatObj [dimension distance objs]
+  (reduce (fn [acc obj] (pairObj dimension distance acc obj)) (first objs) (rest objs)))
 
 (defn xyGrid [dist xn yn obj]
     (repeatObj [1 0 0] dist
     (repeat xn (repeatObj [0 1 0] dist (repeat yn obj)))))
 
-; battery parallel cell (8P)
-(def cellGroupSpec (atom { :xn 4 :yn 2 :space 5 }))
 (def cellGroupObj (xyGrid (:space @cellGroupSpec) (:xn @cellGroupSpec) (:yn @cellGroupSpec) cellObj))
 
-; battery pack (20S8P)
-(def packSpec (atom { :xn 4 :yn 5 :space 20 }))
-(def pack (xyGrid 20 4 5 cellGroupObj))
+(def packObj (xyGrid (:space @packSpec) (:xn @packSpec) (:yn @packSpec) cellGroupObj))
 
-; bus bar (3mm)
+(:obj packObj)
+#+end_src
+
+#+RESULTS:
+:results:
+[[././3d/pack.png]]
+:end:
+
+** Thinking about bus bars
+Just to visualize bus bars. these are 3mm with 10mm padding. need to figure out:
+- how to connect to cells
+- how to connect cell groups
+  (there will be two types of connections, x and y)
+
+#+view: ./3d/busbar1.png
+#+view: ./3d/busbar2.png 0,0,0,0,0,90,400
+#+view: ./3d/busbar3.png 0,0,0,90,0,90,400
+#+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
+; specification for the bus bar construction
 (def busBarSpec (atom { :thicc 3 :holespace 2 :padding 10 :zOffset 0 }))
 
 (let [r (+ (:r @cellSpec) (:holespace @busBarSpec)) d (* r 2) thicc ( + (:thicc @busBarSpec) 1)]
@@ -1049,112 +1093,38 @@ we define a cell
 
 (def holeGroupObj (xyGrid (:space @cellGroupSpec) (:xn @cellGroupSpec) (:yn @cellGroupSpec) cellHoleObj))
 
-(let [
-      cellDim (:dims cellGroupObj)
+(let [cellDim (:dims cellGroupObj)
       padding (+ (:padding @busBarSpec) (:holespace @busBarSpec))
       thicc (:thicc @busBarSpec)
       zOffset (:zOffset @busBarSpec)
       cellHeight (get cellDim 2)
       xDim (+ (get cellDim 0) padding)
       yDim (+ (get cellDim 1) padding)
-      ]
+      copperColor [0.9 0.550980 0.300000]]
+  
      (println "// dims" xDim yDim thicc)
      
 (def busBarObj
   (->Obj [xDim yDim thicc]
-         (translate [0 0 (+ (/ cellHeight 2) zOffset) ] (difference
+         (color copperColor (translate [0 0 (+ (/ cellHeight 2) zOffset) ] (difference
           (cube xDim yDim thicc)
-          (:obj holeGroupObj))))))
+          (:obj holeGroupObj)))))))
 
+; (:obj (unionObj cellGroupObj busBarObj))
 (:obj (repeatObj [0 1 0] 20 [
-  (unionObj cellGroupObj busBarObj)
-  (unionObj (flipObj cellGroupObj) busBarObj)
-]))
-           
+   (unionObj [busBarObj (flipObj busBarObj) cellGroupObj])
+   (unionObj [busBarObj (flipObj busBarObj) (flipObj cellGroupObj)])
+ ]))
 #+end_src
 
 #+RESULTS:
 :results:
-[[././3d/pair1.png]]
-[[././3d/pair2.png]]
-[[././3d/pair3.png]]
+[[././3d/busbar1.png]]
+[[././3d/busbar2.png]]
+[[././3d/busbar3.png]]
 :end:
 
-
-
-
-* Bus bar
-** initial design
-#+begin_src scadclj :axes t :session batt :exports both :scadfile battpair.scad :codefile code.clj
-(defn rescaleColor [r g b a] [(/ r 255) (/ g 255) (/ b 255) a])
-
-(let [
-      busBarThicc 3
-      busBarSpace -2
-      busBarDist 4
-      dist 10
-      moveDist (/ (+ dist (:dimY parallelObj)) 2)
-      dimX (:dimX parallelObj)
-      dimY (+ (* (:dimY parallelObj) 2) dist)
-      ]
-
-  (defn createPair_old [obj] (->Obj dimX dimY
-  (union 
-   (translate [0 moveDist 0] (:obj obj))
-   (rotate [0 Math/PI 0]
-          (translate [0 (* moveDist -1) 0] (:obj obj))))))
-
-
-  
-(defn createPair [obj]
-  (spreadObjectF 1 2 dist dist
-    (fn [x y]
-      (if (= (mod y 2) 0)
-        obj
-        (->Obj (:dimX obj) 
-               (:dimY obj)
-               (rotate [0 Math/PI 0] (:obj obj)))))))
-
-
-
-  (def singleHole
-    (->Obj
-     (:dimX cellObj)
-     (:dimY cellObj)
-     (cylinder (+ (/ (:dimX cellObj) 2) busBarSpace), (+ busBarThicc 2))))
-
-  (def busBarCutter (createPair (parallelObjf singleHole)))
-
-  (def busBar (translate
-               [0 moveDist (+ (/ (:height @cellSpec) 2) (+ (/ busBarThicc 2) busBarDist))]
-               (union
-                (cube (:dimX busBarCutter) (:dimY busBarCutter) busBarThicc)
-                (:obj busBarCutter))))
-
-  ;; (binding [*out* *err*]
-  ;; (println "eleement dimX" (:dimX parallelObj) "dimY" (:dimY parallelObj))
-  ;; (println "cutter dimX" (:dimX busBarCutter) "dimY" (:dimY busBarCutter)))
-  
-  (def busBarCombo
-    (->Obj
-     (:dimX parallelObj)
-     (:dimY parallelObj)
-     (union (color (rescaleColor 255 186 122 1) busBar)
-            (:obj parallelObj))))
-
-  (def twoSeries (createPair busBarCombo))
-)
-
-
-(defn addPair [dimension distance obj1 obj2])
-
-
-(:obj (spreadObjectF 3 3 10 10 (fn [x y] parallelObj)))
-
-#+end_src
-
-
-** Cell level fusing
+** Cell level fusing calculation
 
 We expect each of our cells to be able to output 18.75A, how will a 2cm strip of nickel perform here?
 
@@ -1201,9 +1171,7 @@ Standard nickel strip used in batteries is 8x0.75mm so 6mm² which gives us 3.12
 
 Nickel has higher resistance, I'm not confident in my temp calculations but this is worrysome, I need to validate this experimentally. For now I will proceed with the assumption that I can design good nickel fuses
 
-soldering video: https://www.youtube.com/watch?v=cWQWDyBtgTs
-
-* Individual Cell Current
+[[https://www.youtube.com/watch?v=cWQWDyBtgTs][soldering video]]
 
 
 * Cabling Structure
