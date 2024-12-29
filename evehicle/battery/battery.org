@@ -959,110 +959,132 @@ _Note that here bus bar is not in contact with actual cells, likely to eliminate
 * Starting with scad-clj
 we define a cell
 
-##+view: ./3d/cell1.png 0,0,0,0,0,90,300
-##+view: ./3d/cell2.png 0,0,0,90,0,0,300
-#+begin_src scadclj :exports both :axes t :session batt
+#+begin_src scadclj :exports code :axes t :session batt
+; all our objects know their own dimensions
+; (so that we can build auto-stacking functions)
+(defrecord Obj [dims obj])
 
 (def cellSpec (atom { :r 10.625 :height 70.7 }))
 (swap! cellSpec assoc :d (* (:r @cellSpec) 2))
 
-; all our objects know their own dimensions
-; (so that we can build auto-stacking functions)
-(defrecord Obj [dimX dimY obj])
-
 (let [r (:r @cellSpec) d (* r 2) height (:height @cellSpec) green [0.6 1 0.6 0.5]]
   (def cellObj
-    (->Obj d d
+    (->Obj [ d d height ]
         (union (color green (cylinder r, height)
         (translate [0, 0, (+ (/ height 2) 1)] (cylinder 5 2)))))))
 
-(defn make-row [x xDist objFn yn ySpacing]
-  (reduce (fn [inner-acc y]
-            (let [obj (objFn x y)
-                  yDist (+ (:dimY obj) ySpacing)]
-              {:objs (conj (:objs inner-acc) 
-                          (translate [(* xDist x) (* yDist y) 0] (:obj obj)))
-               :dimY (+ yDist (:dimY inner-acc))}))
-          {:objs [] :dimY 0}
-          (range 0 yn)))
-
-(defn make-grid [xn yn xSpacing ySpacing objFn]
-  (reduce (fn [acc x]
-            (let [obj (objFn x 0)
-                  xDist (+ (:dimX obj) xSpacing)
-                  row-result (make-row x xDist objFn yn ySpacing)]
-              {:objs (conj (:objs acc) (:objs row-result))
-               :dimX (+ xDist (:dimX acc))
-               :dimY (:dimY row-result)}))
-          {:objs [] :dimX 0 :dimY 0}
-          (range 0 xn)))
-
-(defn spreadObjectF [xn yn xSpacing ySpacing objFn]
-  (let [result (make-grid xn yn xSpacing ySpacing objFn)]
-    (->Obj (:dimX result) (:dimY result) (:objs result))))
-
-
-
-; function to stack some object on X and Y dimensions, used later
-(defn spreadObject [xn yn xSpacing ySpacing obj]
-  (let [
-        xDist (+ (:dimX obj) xSpacing)
-        yDist (+ (:dimY obj) ySpacing)
-        centerX (- (/ (* xDist xn) 2) (/ xDist 2))
-        centerY (- (/ (* yDist yn) 2) (/ yDist 2))
-        ]
-
-  (->Obj
-   (* (+ xSpacing (:dimX obj)) xn)
-   (* (+ ySpacing (:dimY obj)) yn)
-   (translate [ (- centerX), (- centerY), 0 ]
-   (map (fn [x]
-          (map (fn [y]
-                 (translate [ (* xDist x) (* yDist y) 0 ] (:obj obj)))
-               (range 0 yn)))
-        (range 0 xn))))))
-  
 (:obj cellObj)
+#+end_src
+
+
+#+view: ./3d/pair1.png
+#+view: ./3d/pair2.png 0,0,0,0,0,90,300
+#+view: ./3d/pair3.png 0,0,0,90,0,0,300
+#+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
+(defn addPair [dimension distance obj1 obj2]
+  ;(println "// Input objects dims:" (:dims obj1) (:dims obj2))
+  ; First calculate total dims
+  (let [distance-vec (mapv #(if (zero? %) 0 (* % distance)) dimension)
+        total-dims (mapv + 
+                        (mapv * dimension (:dims obj1))
+                        (mapv * dimension (:dims obj2))
+                        distance-vec
+                        (mapv * (mapv #(- 1 %) dimension)
+                              (mapv max (:dims obj1) (:dims obj2))))
+        ;_ (println "// total-dims:" total-dims)
+        
+        ; Get the joining dimension index (0 for x, 1 for y, 2 for z)
+        join-dim (first (keep-indexed #(when (= %2 1) %1) dimension))
+        
+        ; Get sizes in joining dimension
+        total-size (nth total-dims join-dim)
+        obj1-size (nth (:dims obj1) join-dim)
+        obj2-size (nth (:dims obj2) join-dim)
+        
+        ; Calculate offsets in joining dimension
+        obj1-offset (mapv #(if (= % 1) (/ (- total-size obj1-size) 2) 0) dimension)
+        obj2-offset (mapv #(if (= % 1) (/ (- total-size obj2-size) -2) 0) dimension)
+                              
+        ;_ (println "// obj1 translation:" (mapv - obj1-offset))
+        ;_ (println "// obj2 translation:" (mapv - obj2-offset))
+        
+        obj1-trans (translate (mapv - obj1-offset) (:obj obj1))
+        obj2-trans (translate (mapv - obj2-offset) (:obj obj2))]
+    
+    (->Obj total-dims (union obj1-trans obj2-trans))))
+
+(defn repeatObj [dimension distance objs]
+  (reduce (fn [acc obj] (addPair dimension distance acc obj)) (first objs) (rest objs)))
+
+(defn flipObj [obj] (->Obj (:dims obj) (rotate [0 Math/PI 0] (:obj obj))))
+
+(defn unionObj [obj1 obj2] (->Obj (:dims obj1) (union (:obj obj1) (:obj obj2))))
+
+
+(def testObj1 (->Obj [25 25 25] (color [1 0 0] (cube 25 25 25))))
+(def testObj2 (->Obj [10 10 10] (color [0 1 0] (cube 10 10 10))))
+
+;(:obj (addPair [0 0 1] 10 testObj1 testObj2))
+;(defn objF [] testObj2)
+;(:obj (repeatObj [0 0 1] 10 [testObj2 testObj1 testObj2]))
+
+(defn xyGrid [dist xn yn obj]
+    (repeatObj [1 0 0] dist
+    (repeat xn (repeatObj [0 1 0] dist (repeat yn obj)))))
+
+; battery parallel cell (8P)
+(def cellGroupSpec (atom { :xn 4 :yn 2 :space 5 }))
+(def cellGroupObj (xyGrid (:space @cellGroupSpec) (:xn @cellGroupSpec) (:yn @cellGroupSpec) cellObj))
+
+; battery pack (20S8P)
+(def packSpec (atom { :xn 4 :yn 5 :space 20 }))
+(def pack (xyGrid 20 4 5 cellGroupObj))
+
+; bus bar (3mm)
+(def busBarSpec (atom { :thicc 3 :holespace 2 :padding 10 :zOffset 0 }))
+
+(let [r (+ (:r @cellSpec) (:holespace @busBarSpec)) d (* r 2) thicc ( + (:thicc @busBarSpec) 1)]
+ (def cellHoleObj
+   (->Obj [ (:d @cellSpec) (:d @cellSpec) thicc ] (cylinder r, thicc))))
+
+(def holeGroupObj (xyGrid (:space @cellGroupSpec) (:xn @cellGroupSpec) (:yn @cellGroupSpec) cellHoleObj))
+
+(let [
+      cellDim (:dims cellGroupObj)
+      padding (+ (:padding @busBarSpec) (:holespace @busBarSpec))
+      thicc (:thicc @busBarSpec)
+      zOffset (:zOffset @busBarSpec)
+      cellHeight (get cellDim 2)
+      xDim (+ (get cellDim 0) padding)
+      yDim (+ (get cellDim 1) padding)
+      ]
+     (println "// dims" xDim yDim thicc)
+     
+(def busBarObj
+  (->Obj [xDim yDim thicc]
+         (translate [0 0 (+ (/ cellHeight 2) zOffset) ] (difference
+          (cube xDim yDim thicc)
+          (:obj holeGroupObj))))))
+
+(:obj (repeatObj [0 1 0] 20 [
+  (unionObj cellGroupObj busBarObj)
+  (unionObj (flipObj cellGroupObj) busBarObj)
+]))
+           
 #+end_src
 
 #+RESULTS:
 :results:
+[[././3d/pair1.png]]
+[[././3d/pair2.png]]
+[[././3d/pair3.png]]
 :end:
 
 
 
-** a parallel block
-#+begin_src scadclj :file ./3d/parallel_block.png :results file link :exports both :axes t :session batt :codefile code.clj
-(let [ dist 5 x 4 y 2 ]
-  ; need to repeat objects while matching cell positions,
-  ; will be used for bus bar for example
-  (defn parallelObjf [cellObj] (spreadObject x y dist dist cellObj)))
-
-(def parallelObj (parallelObjf cellObj))
-(:obj parallelObj)
-#+end_src
-
-#+RESULTS:
-[[file:./3d/parallel_block.png]]
-
-
-** a full pack
-#+begin_src scadclj :file ./3d/series_block.png :results file link :exports both :axes t :session batt :codefile code.clj
-(let [ dist 10 x 4 y 5 ]
-  (def seriesObj (spreadObject x y dist dist parallelObj)))
-
-(:obj seriesObj)
-#+end_src
-
-#+RESULTS:
-[[file:./3d/series_block.png]]
-
 
 * Bus bar
 ** initial design
-##+view: ./3d/busbar2.png
-#+view: ./3d/busbar3.png 0,0,0,0,0,90,1300
-#+view: ./3d/busbar1.png 0,0,0,90,0,0,1300
 #+begin_src scadclj :axes t :session batt :exports both :scadfile battpair.scad :codefile code.clj
 (defn rescaleColor [r g b a] [(/ r 255) (/ g 255) (/ b 255) a])
 
@@ -1123,15 +1145,14 @@ we define a cell
   (def twoSeries (createPair busBarCombo))
 )
 
+
+(defn addPair [dimension distance obj1 obj2])
+
+
 (:obj (spreadObjectF 3 3 10 10 (fn [x y] parallelObj)))
 
 #+end_src
 
-#+RESULTS:
-:results:
-[[././3d/busbar3.png]]
-[[././3d/busbar1.png]]
-:end:
 
 ** Cell level fusing
 
