@@ -834,7 +834,6 @@ Modelling two parallel blocks with 20x3 mm bus bars
 
 _turns out openscad is not sustainable, wrote a cli for [[https://github.com/leshy/scad-clj-cli][clojure -> openscad compiler]] so starting from scratch_
 
-# :camera 0,0,0,45,0,45,400
 #+begin_src openscad :file single_series.png :results file link :exports both :axes t
 cell_height = 70.7;
 cell_r = 10.625;
@@ -942,7 +941,6 @@ translate([(-parallel_module_x / 2) + cell_d - cell_distance, -parallel_module_y
 //spread(series_xn, series_yn, parallel_module_x + module_distance, parallel_module_y + module_distance )
 //parallel_module();
 #+end_src
-
 #+RESULTS:
 [[file:single_series.png]]
 
@@ -955,7 +953,7 @@ Some pros seem to have reached the same conclusions:
 
 [[./img/pro-battery.png]]
 
-_Note that here bus bar is not in contact with actual cells, likely to eliminate vibration of the plate damaging battery insulation, seems like a good idea_
+_Note that here bus bar is not in contact with actual cells, likely to eliminate vibration of the plate damaging battery insulation? depends on general approach to construction, seems like a good idea_
 
 
 * Clojure Models
@@ -985,7 +983,31 @@ We define some 3d manipulation functions and test them by building a rough cell 
 
 ; basic ops so we don't need to destructure our Obj record
 
-(defn flipObj [obj] (->Obj (:dims obj) (rotate [0 Math/PI 0] (:obj obj))))
+(defn swap-dims-90 [dims axis]
+  (let [[x y z] dims]
+    (case axis
+      :x [x z y]    ; y->z, z->y
+      :y [z y x]    ; x->z, z->x
+      :z [y x z]))) ; x->y, y->x
+
+(defn swap-dims [dims axis rotations]
+  (nth (iterate #(swap-dims-90 % axis) dims)
+       (mod rotations 4)))
+
+(defn rotateObj [dirs obj]
+  (let [[rx ry rz] dirs
+        angle-x (* (mod rx 4) (/ Math/PI 2))
+        angle-y (* (mod ry 4) (/ Math/PI 2))
+        angle-z (* (mod rz 4) (/ Math/PI 2))
+        new-dims (-> (:dims obj)
+                    (swap-dims :x rx)
+                    (swap-dims :y ry)
+                    (swap-dims :z rz))]
+    (->Obj new-dims 
+           (rotate [angle-x angle-y angle-z] (:obj obj)))))
+
+(defn flipObj [obj] (rotateObj [2 0 0] obj))
+
 (defn translateObj [obj vector] (->Obj (:dims obj) (translate vector (:obj obj))))
 
 (defn unionObj [objs]
@@ -1039,15 +1061,6 @@ We define some 3d manipulation functions and test them by building a rough cell 
         g (bit-shift-right (bit-and rgb-int 0x00FF00) 8)
         b (bit-and rgb-int 0x0000FF)]
     [(/ r 255.0) (/ g 255.0) (/ b 255.0)]))
-
-;; Example usage:
-(hex-to-rgb "#adf7f6")  
-;; => [0.6784313725490196 0.9686274509803922 0.9647058823529412]
-
-;; Test with some common colors
-(hex-to-rgb "#000000")  ;; => [0.0 0.0 0.0]
-(hex-to-rgb "#ffffff")  ;; => [1.0 1.0 1.0]
-(hex-to-rgb "#ff0000")  ;; => [1.0 0.0 0.0]
 
 ;(def testObj1 (->Obj [25 25 25] (color [1 0 0] (cube 25 25 25))))
 ;(def testObj2 (->Obj [10 10 10] (color [0 1 0] (cube 10 10 10))))
@@ -1111,10 +1124,11 @@ Just to visualize bus bars. these are 3mm with 10mm padding. need to figure out:
           (:obj holeGroupObj)))))))
 
 ; (:obj (unionObj cellGroupObj busBarObj))
-(:obj (repeatObj [0 1 0] 20 [
+(def cellPairBusObj (repeatObj [0 1 0] 20 [
    (unionObj [busBarObj (flipObj busBarObj) cellGroupObj])
    (unionObj [busBarObj (flipObj busBarObj) (flipObj cellGroupObj)])
  ]))
+(:obj cellPairBusObj)
 #+end_src
 
 #+RESULTS:
@@ -1124,7 +1138,44 @@ Just to visualize bus bars. these are 3mm with 10mm padding. need to figure out:
 [[././3d/busbar3.png]]
 :end:
 
-** Cell level fusing calculation
+** Different format
+#+view: ./3d/test.png
+#+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
+(def rotCellObj (rotateObj [ 0 0 1 ] cellObj))
+(:obj (repeatObj [0 0 1] 5 (repeat 4 rotCellObj)))
+#+end_src
+
+#+RESULTS:
+:results:
+[[././3d/test.png]]
+:end:
+
+
+** Cell level fuse research
+
+*** TODO Figure out a material
+considerations:
+- connection to the cell
+- suitability to a role as a fuse
+
+*** Copper considerations
+Welding to battery
+- TODO spot?
+- TODO laser?
+
+Check:
+- https://cellsaviors.com/blog/copper-nickel-sandwich
+- https://cellsaviors.com/blog/can-you-spot-weld-copper
+- https://www.copper.org/applications/marine/cuni/fabrication/joining_welding_cutting_lining.html
+- https://endless-sphere.com/sphere/threads/copper-nickel-sandwich-buses-for-series-connections.108006/
+- https://endless-sphere.com/sphere/threads/spot-welding-copper-strips-to-18650-battery-cells.84680/page-23
+  
+*** Nickel considerations
+fuse test video
+https://www.youtube.com/watch?v=BAPHF3Sq2t8
+
+Spot welding to cell is easy
+- TODO welding to copper bus bar?
 
 We expect each of our cells to be able to output 18.75A, how will a 2cm strip of nickel perform here?
 
