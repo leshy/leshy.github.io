@@ -959,7 +959,7 @@ _Note that here bus bar is not in contact with actual cells, likely to eliminate
 * Clojure Models
 We define some 3d manipulation functions and test them by building a rough cell positioning for a full pack
 #+view: ./3d/pack.png 0,0,0,45,0,45,1400
-#+begin_src scadclj :exports both :axes t :session batt
+#+begin_src scadclj :exports code :axes t :session batt
 ; all our objects know their own dimensions
 ; (so that we can build auto-stacking functions)
 (defrecord Obj [dims obj])
@@ -1008,7 +1008,7 @@ We define some 3d manipulation functions and test them by building a rough cell 
 
 (defn flipObj [obj] (rotateObj [2 0 0] obj))
 
-(defn translateObj [obj vector] (->Obj (:dims obj) (translate vector (:obj obj))))
+(defn translateObj [vector obj] (->Obj (:dims obj) (translate vector (:obj obj))))
 
 (defn unionObj [objs]
   (->Obj (:dims (first objs))
@@ -1048,6 +1048,7 @@ We define some 3d manipulation functions and test them by building a rough cell 
         obj2-trans (translate (mapv - obj2-offset) (:obj obj2))]
     
     (->Obj total-dims (union obj1-trans obj2-trans))))
+
 ; color helpers
 (defn hex-to-rgb
   "Convert a hex color string (e.g., \"#adf7f6\") to a normalized RGB vector [r g b]
@@ -1067,13 +1068,28 @@ We define some 3d manipulation functions and test them by building a rough cell 
 
 ;(:obj (pairObj [0 0 1] 10 testObj1 testObj2))
 ;(defn objF [] testObj2)
-;(:obj (repeatObj [0 0 1] 10 [testObj2 testObj1 testObj2]))
-(defn repeatObj [dimension distance objs]
+;(:obj (seqObj [0 0 1] 10 [testObj2 testObj1 testObj2]))
+(defn seqObj [dimension distance objs]
   (reduce (fn [acc obj] (pairObj dimension distance acc obj)) (first objs) (rest objs)))
 
+
+
+(defn previewObj [distance obj]
+  (let [rot (/ Math/PI 4)]
+          (:obj (unionObj [
+           (translateObj [distance 0 distance] obj)
+           (translateObj [(* distance 1) 0 (* distance -1)] (rotateObj [1 0 0] obj))
+           (translateObj [(* distance -1) 0 (* distance -1)] (rotateObj [3 0 1] obj))
+           (translateObj [(* distance -1) 0 (* distance 1)]
+                         (->Obj (:dims obj) (rotate [rot 0 0] (rotate [0 0 rot] (:obj obj)))))
+]))))
+
+
+(defn repeatObj [dimension distance n obj] (seqObj dimension distance (repeat n obj)))
+
 (defn xyGrid [dist xn yn obj]
-    (repeatObj [1 0 0] dist
-    (repeat xn (repeatObj [0 1 0] dist (repeat yn obj)))))
+    (seqObj [1 0 0] dist
+    (repeat xn (seqObj [0 1 0] dist (repeat yn obj)))))
 
 (def cellGroupObj (xyGrid (:space @cellGroupSpec) (:xn @cellGroupSpec) (:yn @cellGroupSpec) cellObj))
 
@@ -1082,20 +1098,106 @@ We define some 3d manipulation functions and test them by building a rough cell 
 (:obj packObj)
 #+end_src
 
+Investigating different pack formats
+
+#+view: ./3d/packs2.png
+#+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
+(def rotCellObj (rotateObj [ 0 0 1 ] cellGroupObj))
+
+(def pack1 (rotateObj [0 0 1] packObj))
+
+(println "// pack1 dimensions: " (:dims pack1))
+
+(def pack2
+ (repeatObj [1 0 0] 20 2
+ (repeatObj [0 1 0] 20 2
+ (rotateObj [0 0 1] (repeatObj [0 0 1] 5 5 rotCellObj)))))
+
+(println "// pack2 dimensions: " (:dims  (rotateObj [1 0 0] pack2)))
+
+
+(def pack3
+  (repeatObj [0 0 1] 20 2
+  (repeatObj [1 0 0] 20 2 
+  (repeatObj [0 1 0] 20 5 cellGroupObj))))
+
+(println "// pack3 dimensions: " (:dims pack3))
+
+(:obj (seqObj [1 0 0] 100 [ pack1 (rotateObj [1 0 0] pack2) pack3 ]))
+#+end_src
 #+RESULTS:
 :results:
-[[././3d/pack.png]]
+[[././3d/packs2.png]]
+:end:
+| pack         | width (mm) | depth (mm) | height (mm) | volume (cm³) |
+|--------------+------------+------------+-------------+--------------|
+| battery case |        500 |        350 |         195 |        34125 |
+| pack1        |        460 |      317.5 |        70.7 |        10326 |
+| pack2        |        373 |        220 |         115 |         9436 |
+| pack3        |        317 |        220 |       161.4 |        11256 |
+#+TBLFM: $5='(round (/ (* $2 $3 $4) 1000));N 
+  _actually pack2 seems very interesting, why is this an uncommon HP or DIY format?_
+
+* Pack 1 Option
+** Details
+- case dimensions:  [500 350 195]
+- pack1 dimensions: [460.0 317.5 70.7]
+- free space:       [40 33 124.3]
+
+*** Thermals
+- Probably speed controlled server rack fans
+- just leave space for fnas for now, see thermal perforamnce later
+- probably need some airflow though, figure out how to deal with water ingress etc
+  
+*** Fusing
+
+
+
+** Model
+#+view: ./3d/pack1.png 0,0,0,90,0,0,3000
+#+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
+(previewObj 300 pack1)
+#+end_src
+
+#+RESULTS:
+:results:
+[[././3d/pack1.png]]
 :end:
 
-** Thinking about bus bars
+
+* Pack 2 Option
+** Details
+Dimensions (mm) [220.0 115.0 373.5]
+
+Bus bars need to exist but their function is only balancing and ideally have minimal current passing through
+
+Whole pack can be sandwiched using long screws?
+
+*** Thermals
+Very good airflow and easy cooling
+
+*** Fusing
+seems tricky but is actually doable, bus bars touch for current transfer but cells can be indiviually fused
+
+** Model
+#+view: ./3d/pack2.png 0,0,0,90,0,0,2500
+#+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
+(previewObj 250 pack2)
+#+end_src
+
+#+RESULTS:
+:results:
+[[././3d/pack2.png]]
+:end:
+
+
+* Horizontal bus bars
 Just to visualize bus bars. these are 3mm with 10mm padding. need to figure out:
 - how to connect to cells
 - how to connect cell groups
   (there will be two types of connections, x and y)
 
-#+view: ./3d/busbar1.png
-#+view: ./3d/busbar2.png 0,0,0,0,0,90,400
-#+view: ./3d/busbar3.png 0,0,0,90,0,90,400
+#+view: ./3d/busbarCombo.png 0,0,0,90,0,0,750
 #+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
 ; specification for the bus bar construction
 (def busBarSpec (atom { :thicc 3 :holespace 2 :padding 10 :zOffset 0 }))
@@ -1113,45 +1215,37 @@ Just to visualize bus bars. these are 3mm with 10mm padding. need to figure out:
       cellHeight (get cellDim 2)
       xDim (+ (get cellDim 0) padding)
       yDim (+ (get cellDim 1) padding)
-      copperColor [0.9 0.550980 0.300000]]
+      copperColor [0.9 0.550980 0.300000]
+      nickelColor [0.9 0.9 0.9]]
   
      (println "// dims" xDim yDim thicc)
      
 (def busBarObj
   (->Obj [xDim yDim thicc]
-         (color copperColor (translate [0 0 (+ (/ cellHeight 2) zOffset) ] (difference
-          (cube xDim yDim thicc)
-          (:obj holeGroupObj)))))))
+         (color copperColor (translate [0 0 (+ (/ cellHeight 2) zOffset)]
+         (difference
+           (cube xDim yDim thicc)
+           (:obj holeGroupObj)))))))
 
 ; (:obj (unionObj cellGroupObj busBarObj))
-(def cellPairBusObj (repeatObj [0 1 0] 20 [
+(def cellPairBusObj (seqObj [0 1 0] 20 [
    (unionObj [busBarObj (flipObj busBarObj) cellGroupObj])
    (unionObj [busBarObj (flipObj busBarObj) (flipObj cellGroupObj)])
  ]))
-(:obj cellPairBusObj)
+
+(previewObj 75 busBarObj)
+
+;(previewObj 100 cellPairBusObj)
 #+end_src
 
 #+RESULTS:
 :results:
-[[././3d/busbar1.png]]
-[[././3d/busbar2.png]]
-[[././3d/busbar3.png]]
-:end:
-
-** Different format
-#+view: ./3d/test.png
-#+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
-(def rotCellObj (rotateObj [ 0 0 1 ] cellObj))
-(:obj (repeatObj [0 0 1] 5 (repeat 4 rotCellObj)))
-#+end_src
-
-#+RESULTS:
-:results:
-[[././3d/test.png]]
+[[././3d/busbarCombo.png]]
 :end:
 
 
-** Cell level fuse research
+
+* Cell level fuse research
 
 *** TODO Figure out a material
 considerations:
