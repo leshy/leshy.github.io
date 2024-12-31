@@ -1010,6 +1010,8 @@ We define some 3d manipulation functions and test them by building a rough cell 
 
 (defn translateObj [vector obj] (->Obj (:dims obj) (translate vector (:obj obj))))
 
+(defn overrideDims [dimsObj targetObj] (->Obj (:dims dimsObj) (:obj targetObj)))
+
 (defn unionObj [objs]
   (->Obj (:dims (first objs))
          (apply union (map :obj objs))))
@@ -1086,6 +1088,7 @@ We define some 3d manipulation functions and test them by building a rough cell 
 
 
 (defn repeatObj [dimension distance n obj] (seqObj dimension distance (repeat n obj)))
+
 
 (defn xyGrid [dist xn yn obj]
     (seqObj [1 0 0] dist
@@ -1196,10 +1199,11 @@ Just to visualize bus bars. these are 3mm with 10mm padding. need to figure out:
 - how to connect to cells
 - how to connect cell groups
   (there will be two types of connections, x and y)
-
-#+view: ./3d/busbarCombo.png 0,0,0,90,0,0,750
+  
+#+view: ./3d/busbarCombo.png
 #+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
 ; specification for the bus bar construction
+
 (def busBarSpec (atom { :thicc 3 :holespace 2 :padding 10 :zOffset 0 }))
 
 (let [r (+ (:r @cellSpec) (:holespace @busBarSpec)) d (* r 2) thicc ( + (:thicc @busBarSpec) 1)]
@@ -1208,14 +1212,18 @@ Just to visualize bus bars. these are 3mm with 10mm padding. need to figure out:
 
 (def holeGroupObj (xyGrid (:space @cellGroupSpec) (:xn @cellGroupSpec) (:yn @cellGroupSpec) cellHoleObj))
 
-(let [cellDim (:dims parallelCellsObj)
+
+(let [parallelCellsDim (:dims parallelCellsObj)
+      
       padding (+ (:padding @busBarSpec) (:holespace @busBarSpec))
       thicc (:thicc @busBarSpec)
       zOffset (:zOffset @busBarSpec)
-      cellHeight (get cellDim 2)
-      xDim (+ (get cellDim 0) padding)
-      yDim (+ (get cellDim 1) padding)
-      copperColor [0.9 0.550980 0.300000]]
+      cellHeight (get parallelCellsDim 2)
+      
+      xDim (+ (get parallelCellsDim 0) padding)
+      yDim (+ (get parallelCellsDim 1) padding)
+      
+      copperColor [0.9 0.55 0.3]]
   
      (println "// dims" xDim yDim thicc)
      
@@ -1227,7 +1235,6 @@ Just to visualize bus bars. these are 3mm with 10mm padding. need to figure out:
            (cube xDim yDim thicc)
            (:obj holeGroupObj))))))
 
-
 ;(def parallelCellsObj (xyGrid (:space @cellGroupSpec) (:xn @cellGroupSpec) (:yn @cellGroupSpec) cellObj))
 
 (def nickelStripsObj
@@ -1235,34 +1242,32 @@ Just to visualize bus bars. these are 3mm with 10mm padding. need to figure out:
       nickelWidth 10
       nickelLength xDim
       nickelThicc 1
-      nickelColor [0.7 0.7 0.7 0.5]]
-
+      nickelColor [0.8 0.8 0.8]]
       (repeatObj [0 1 0] (:space @cellGroupSpec) 2
-                 (->Obj [nickelLength (:d @cellSpec) nickelThicc]
-                        (color nickelColor 
-                               (cube nickelLength nickelWidth nickelThicc)
-                               ))))
-  
-))
+      (->Obj [nickelLength (:d @cellSpec) nickelThicc]
+             (color nickelColor 
+                    (cube nickelLength nickelWidth nickelThicc)
+                    )))))
 
-(def busBarNickelObj (pairObj [0 0 1] 0 busBarObj nickelStripsObj))
+(def busBarNickelObj (->Obj (:dims busBarObj) (union
+    (:obj busBarObj)
+    (translate [0 0 (/ thicc 1.9) ] (:obj nickelStripsObj)))))
 
-(def parallelCellsBusBarObj
-  (pairObj [0 0 1] 0
-           ; this translate is just for openscad to color correctly
-           (translateObj [0 0 0.01] parallelCellsObj) 
-           busBarNickelObj))
+(def busBarPairY
+   (let [
+     midSpace (- (:space @packSpec) padding)
+     fakeYDim (nth (:dims busBarNickelObj) 1)
+    ] (->Obj (:dims busBarNickelObj)
+        (translate [0 (/ (+ midSpace fakeYDim) 2) 0]
+        (union
+         (:obj (pairObj [0 1 0] midSpace busBarNickelObj busBarNickelObj))
+         (color copperColor (cube xDim midSpace thicc))
+         )))))
 
-(def cellPairBusObj (pairObj [0 1 0] 20
-   parallelCellsBusBarObj
-   (flipObj parallelCellsBusBarObj)
-))
 
-;(previewObj 75 cellPairBusObj)
+)
 
-(previewObj 75 busBarNickelObj)
-
-;(previewObj 100 parallelCellsBusBarObj)
+(:obj (seqObj [0 0 1] 0.1 [ (flipObj busBarNickelObj) parallelCellsObj busBarNickelObj ]))
 #+end_src
 
 #+RESULTS:
@@ -1270,7 +1275,34 @@ Just to visualize bus bars. these are 3mm with 10mm padding. need to figure out:
 [[././3d/busbarCombo.png]]
 :end:
 
+#+view: ./3d/initialPacks.png
+#+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
+(def pack1SObj
+   (->Obj (:dims parallelCellsObj) (:obj (pairObj [0 0 1] 0
+           ; this translate is just for openscad to color correctly
+           (translateObj [0 0 0.1] parallelCellsObj) 
+           busBarPairY))))
 
+(def pack1SPreview (pairObj [0 1 0] (:space @packSpec)
+   pack1SObj
+   (rotateObj [0 0 2] parallelCellsObj)
+))
+
+(def pack2SObj (pairObj [0 1 0] (:space @packSpec)
+   pack1SObj
+   (rotateObj [0 0 2] (flipObj pack1SObj))
+))
+
+(def pack4SObj (pairObj [0 1 0] (:space @packSpec) pack2SObj pack2SObj))
+(def pack5SObj (pairObj [0 1 0] (:space @packSpec) pack4SObj parallelCellsObj))
+
+(:obj  pack5SObj)
+#+end_src
+
+#+RESULTS:
+:results:
+[[././3d/initialPacks.png]]
+:end:
 
 * Cell level fuse research
 
