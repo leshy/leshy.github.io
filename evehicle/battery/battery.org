@@ -1091,9 +1091,9 @@ We define some 3d manipulation functions and test them by building a rough cell 
     (seqObj [1 0 0] dist
     (repeat xn (seqObj [0 1 0] dist (repeat yn obj)))))
 
-(def cellGroupObj (xyGrid (:space @cellGroupSpec) (:xn @cellGroupSpec) (:yn @cellGroupSpec) cellObj))
+(def parallelCellsObj (xyGrid (:space @cellGroupSpec) (:xn @cellGroupSpec) (:yn @cellGroupSpec) cellObj))
 
-(def packObj (xyGrid (:space @packSpec) (:xn @packSpec) (:yn @packSpec) cellGroupObj))
+(def packObj (xyGrid (:space @packSpec) (:xn @packSpec) (:yn @packSpec) parallelCellsObj))
 
 (:obj packObj)
 #+end_src
@@ -1102,7 +1102,7 @@ Investigating different pack formats
 
 #+view: ./3d/packs2.png
 #+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
-(def rotCellObj (rotateObj [ 0 0 1 ] cellGroupObj))
+(def rotCellObj (rotateObj [ 0 0 1 ] parallelCellsObj))
 
 (def pack1 (rotateObj [0 0 1] packObj))
 
@@ -1119,7 +1119,7 @@ Investigating different pack formats
 (def pack3
   (repeatObj [0 0 1] 20 2
   (repeatObj [1 0 0] 20 2 
-  (repeatObj [0 1 0] 20 5 cellGroupObj))))
+  (repeatObj [0 1 0] 20 5 parallelCellsObj))))
 
 (println "// pack3 dimensions: " (:dims pack3))
 
@@ -1208,34 +1208,61 @@ Just to visualize bus bars. these are 3mm with 10mm padding. need to figure out:
 
 (def holeGroupObj (xyGrid (:space @cellGroupSpec) (:xn @cellGroupSpec) (:yn @cellGroupSpec) cellHoleObj))
 
-(let [cellDim (:dims cellGroupObj)
+(let [cellDim (:dims parallelCellsObj)
       padding (+ (:padding @busBarSpec) (:holespace @busBarSpec))
       thicc (:thicc @busBarSpec)
       zOffset (:zOffset @busBarSpec)
       cellHeight (get cellDim 2)
       xDim (+ (get cellDim 0) padding)
       yDim (+ (get cellDim 1) padding)
-      copperColor [0.9 0.550980 0.300000]
-      nickelColor [0.9 0.9 0.9]]
+      copperColor [0.9 0.550980 0.300000]]
   
      (println "// dims" xDim yDim thicc)
      
 (def busBarObj
   (->Obj [xDim yDim thicc]
-         (color copperColor (translate [0 0 (+ (/ cellHeight 2) zOffset)]
+;         (color copperColor (translate [0 0 (+ (/ cellHeight 2) zOffset)]
+         (color copperColor (translate [0 0 (+ zOffset)]
          (difference
            (cube xDim yDim thicc)
-           (:obj holeGroupObj)))))))
+           (:obj holeGroupObj))))))
 
-; (:obj (unionObj cellGroupObj busBarObj))
-(def cellPairBusObj (seqObj [0 1 0] 20 [
-   (unionObj [busBarObj (flipObj busBarObj) cellGroupObj])
-   (unionObj [busBarObj (flipObj busBarObj) (flipObj cellGroupObj)])
- ]))
 
-(previewObj 75 busBarObj)
+;(def parallelCellsObj (xyGrid (:space @cellGroupSpec) (:xn @cellGroupSpec) (:yn @cellGroupSpec) cellObj))
 
-;(previewObj 100 cellPairBusObj)
+(def nickelStripsObj
+  (let [
+      nickelWidth 10
+      nickelLength xDim
+      nickelThicc 1
+      nickelColor [0.7 0.7 0.7 0.5]]
+
+      (repeatObj [0 1 0] (:space @cellGroupSpec) 2
+                 (->Obj [nickelLength (:d @cellSpec) nickelThicc]
+                        (color nickelColor 
+                               (cube nickelLength nickelWidth nickelThicc)
+                               ))))
+  
+))
+
+(def busBarNickelObj (pairObj [0 0 1] 0 busBarObj nickelStripsObj))
+
+(def parallelCellsBusBarObj
+  (pairObj [0 0 1] 0
+           ; this translate is just for openscad to color correctly
+           (translateObj [0 0 0.01] parallelCellsObj) 
+           busBarNickelObj))
+
+(def cellPairBusObj (pairObj [0 1 0] 20
+   parallelCellsBusBarObj
+   (flipObj parallelCellsBusBarObj)
+))
+
+;(previewObj 75 cellPairBusObj)
+
+(previewObj 75 busBarNickelObj)
+
+;(previewObj 100 parallelCellsBusBarObj)
 #+end_src
 
 #+RESULTS:
