@@ -923,7 +923,7 @@ Investigating different pack formats
 
 :end:
 
-  _actually pack2/3 seem very interesting, why is this an uncommon HP or DIY format?_
+  actually pack2/3 seem very interesting, why is this an uncommon format for high output batteries?
 
   
 * Pack 1 Option
@@ -977,7 +977,8 @@ Investigating different pack formats
       xDim        (+ (get parallelCellsDim 0) padding)
       yDim        (+ (get parallelCellsDim 1) padding)
       
-      copperColor [0.9 0.55 0.3]]
+      ; copperColor [0.9 0.55 0.3]]
+      copperColor (hex-to-rgb "#ffa500")]
   
       (println "// dims" xDim yDim thicc)
 
@@ -995,7 +996,9 @@ Investigating different pack formats
       nickelWidth   8
       nickelLength  xDim
       nickelThicc   1
-      nickelColor   [0.8 0.8 0.8]]
+;      nickelColor   [0.8 0.8 0.8]
+      nickelColor   (hex-to-rgb "#333333")
+        ]
                            ; "virtual" Y thickness for easy assembly
       (->Obj [nickelLength (:d @cellSpec) nickelThicc]
              (color nickelColor (cube nickelLength nickelWidth nickelThicc)))))
@@ -1012,9 +1015,8 @@ Investigating different pack formats
         joinedNickelStrips (pairObj [0 1 0] (:space @packSpec) nickelStripsObj nickelStripsObj)
         ]
     (pairObj [0 0 1] 0 joinedBusBar joinedNickelStrips)))
-
 )
-
+  
 (def test2S (pairObj [0 1 0] (:space @packSpec) parallelCellsObj (flipObj parallelCellsObj)))
 
 (def testBusBars2S (pairObj [0 0 1] 0.1 test2S busBarPairY))
