@@ -1082,7 +1082,7 @@ data-session="batt"><pre class="sourceCode clojure"><code class="sourceCode cloj
 <span id="cb1-120"><a href="#cb1-120" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-121"><a href="#cb1-121" aria-hidden="true" tabindex="-1"></a><span class="co">; table print helpers</span></span>
 <span id="cb1-122"><a href="#cb1-122" aria-hidden="true" tabindex="-1"></a>(<span class="bu">defn</span><span class="fu"> printDimsHeader </span>[]</span>
-<span id="cb1-123"><a href="#cb1-123" aria-hidden="true" tabindex="-1"></a>  (<span class="kw">println</span> <span class="st">&quot;| Name | dimX (mm) | dimY (mm) | dimZ (mm) | Vol (cm³) |&quot;</span>)</span>
+<span id="cb1-123"><a href="#cb1-123" aria-hidden="true" tabindex="-1"></a>  (<span class="kw">println</span> <span class="st">&quot;| Name | dimX (mm) | dimY (mm) | dimZ (mm) | Vol (cm3) |&quot;</span>)</span>
 <span id="cb1-124"><a href="#cb1-124" aria-hidden="true" tabindex="-1"></a>  (<span class="kw">println</span> <span class="st">&quot;|-&quot;</span>))</span>
 <span id="cb1-125"><a href="#cb1-125" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-126"><a href="#cb1-126" aria-hidden="true" tabindex="-1"></a>(<span class="bu">defn</span><span class="fu"> printDim </span>[<span class="kw">name</span> obj]</span>
@@ -1184,7 +1184,8 @@ data-scadfile="code.scad"><pre class="sourceCode clojure"><code class="sourceCod
 </div>
 <summary>clojure</summary><code><div class="sourceCode" id="cb1" data-exports="both" data-session="batt"
 data-codefile="code.clj" data-results="output table"
-data-scadfile="code.scad"><pre class="sourceCode clojure"><code class="sourceCode clojure"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>(printDims <span class="st">&quot;pack1&quot;</span> pack1 <span class="st">&quot;pack2&quot;</span> pack2 <span class="st">&quot;pack3&quot;</span> pack3 <span class="st">&quot;pack4&quot;</span> pack4)</span></code></pre></div></code>
+data-scadfile="code.scad"><pre class="sourceCode clojure"><code class="sourceCode clojure"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>(<span class="bu">def</span><span class="fu"> battCase </span>(-&gt;Obj [<span class="fl">350.0</span> <span class="fl">500.0</span> <span class="fl">195.0</span>] <span class="va">nil</span>)) <span class="co">; just for dimensions</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>(printDims <span class="st">&quot;bc&quot;</span> battCase <span class="st">&quot;p1&quot;</span> pack1 <span class="st">&quot;p2&quot;</span> pack2 <span class="st">&quot;p3&quot;</span> pack3 <span class="st">&quot;p4&quot;</span> pack4)</span></code></pre></div></code>
 <div class="RESULTS drawer">
 <table>
 <thead>
@@ -1193,33 +1194,40 @@ data-scadfile="code.scad"><pre class="sourceCode clojure"><code class="sourceCod
 <th>dimX (mm)</th>
 <th>dimY (mm)</th>
 <th>dimZ (mm)</th>
-<th>Vol (cm?)</th>
+<th>Vol (cm3)</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td>pack1</td>
+<td>bc</td>
+<td>350.0</td>
+<td>500.0</td>
+<td>195.0</td>
+<td>34125</td>
+</tr>
+<tr class="even">
+<td>p1</td>
 <td>317.5</td>
 <td>460.0</td>
 <td>70.7</td>
 <td>10326</td>
 </tr>
-<tr class="even">
-<td>pack2</td>
+<tr class="odd">
+<td>p2</td>
 <td>373.5</td>
 <td>460.0</td>
 <td>47.5</td>
 <td>8161</td>
 </tr>
-<tr class="odd">
-<td>pack3</td>
+<tr class="even">
+<td>p3</td>
 <td>250.0</td>
 <td>373.5</td>
 <td>100.0</td>
 <td>9338</td>
 </tr>
-<tr class="even">
-<td>pack4</td>
+<tr class="odd">
+<td>p4</td>
 <td>220.0</td>
 <td>317.5</td>
 <td>161.4</td>

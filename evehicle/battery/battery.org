@@ -799,7 +799,7 @@ We define some 3d manipulation functions and test them by building a rough cell 
 
 ; table print helpers
 (defn printDimsHeader []
-  (println "| Name | dimX (mm) | dimY (mm) | dimZ (mm) | Vol (cm³) |")
+  (println "| Name | dimX (mm) | dimY (mm) | dimZ (mm) | Vol (cm3) |")
   (println "|-"))
 
 (defn printDim [name obj]
@@ -907,17 +907,19 @@ Investigating different pack formats
 
 
 #+begin_src scadclj :exports both :session batt :codefile code.clj :results output table :scadfile code.scad
-(printDims "pack1" pack1 "pack2" pack2 "pack3" pack3 "pack4" pack4)
+(def battCase (->Obj [350.0 500.0 195.0] nil)) ; just for dimensions
+(printDims "bc" battCase "p1" pack1 "p2" pack2 "p3" pack3 "p4" pack4)
 #+end_src
 
 #+RESULTS:
 :results:
-| Name  | dimX (mm) | dimY (mm) | dimZ (mm) | Vol (cm?) |
-|-------+-----------+-----------+-----------+-----------|
-| pack1 |     317.5 |     460.0 |      70.7 |     10326 |
-| pack2 |     373.5 |     460.0 |      47.5 |      8161 |
-| pack3 |     250.0 |     373.5 |     100.0 |      9338 |
-| pack4 |     220.0 |     317.5 |     161.4 |     11274 |
+| Name | dimX (mm) | dimY (mm) | dimZ (mm) | Vol (cm3) |
+|------+-----------+-----------+-----------+-----------|
+| bc   |     350.0 |     500.0 |     195.0 |     34125 |
+| p1   |     317.5 |     460.0 |      70.7 |     10326 |
+| p2   |     373.5 |     460.0 |      47.5 |      8161 |
+| p3   |     250.0 |     373.5 |     100.0 |      9338 |
+| p4   |     220.0 |     317.5 |     161.4 |     11274 |
 
 :end:
 
