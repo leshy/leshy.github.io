@@ -1,0 +1,27 @@
+{
+    "tasks": {
+        "dev": "deno run --watch main.ts"
+    },
+    "imports": {
+        "@david/which": "jsr:@david/which@^0.4.1",
+        "@std/assert": "jsr:@std/assert@1",
+        "gulp": "npm:gulp@^5.0.0",
+        "gulp-filelog": "npm:gulp-filelog@^0.4.1",
+        "gulp-imagemin": "npm:gulp-imagemin@^9.1.0",
+        "gulp-pandoc": "npm:gulp-pandoc@^0.2.2"
+    },
+    "compilerOptions": {
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true
+    },
+    "lint": {
+        "rules": {
+            "exclude": ["require-await", "ban-ts-comment"]
+        }
+    },
+    "fmt": {
+        "indentWidth": 4,
+        "useTabs": false,
+        "semiColons": false
+    }
+}

@@ -1,0 +1,1437 @@
+#+OPTIONS: \n:t
+#+TITLE: Battery Design
+#+LANGUAGE: en
+#+AUTHOR: Ivan Nikolic
+#+DATE: [2024-12-02 Mon]
+#+LAST_MODIFIED: [2024-12-21 Sat]
+
+#+name: header
+#+begin_src emacs-lisp :var tbl="" :exports none
+(cons (car tbl) (cons 'hline (cdr tbl)))
+#+end_src
+
+#+BEGIN_SRC python :results none :exports none :session battcalc :numberLines t
+from typing import Dict, List, Union
+
+def compute(known_values: Dict[Symbol, Union[float, np.ndarray]], 
+           targets: List[Symbol]):
+    
+    # 1. Analyze what symbols are needed for each target
+    def get_free_symbols(expr):
+        if hasattr(expr, 'free_symbols'):
+            return expr.free_symbols
+        return set()
+    
+    needed_symbols = set()
+    for target in targets:
+        needed_symbols.update(get_free_symbols(target))
+    
+    # 2. Check if we can compute numerically
+    missing_symbols = needed_symbols - set(known_values.keys())
+    if missing_symbols:
+        raise Exception("missing symbols " + missing_symbols)
+    
+    # 3. Create vectorized functions
+    all_symbols = tuple(needed_symbols)  # Fix the order of all symbols
+    numeric_funcs = {
+        target: lambdify(all_symbols, target, 'numpy')
+        for target in targets
+    }
+    
+    # 4. Set up parameter grids for array inputs
+    array_inputs = {sym: val for sym, val in known_values.items() 
+                   if isinstance(val, np.ndarray)}
+    if array_inputs:
+        grid_arrays = np.meshgrid(*[val for val in array_inputs.values()])
+        grid_dict = dict(zip(array_inputs.keys(), grid_arrays))
+        eval_dict = {**known_values, **grid_dict}
+    else:
+        eval_dict = known_values
+    
+    args = [eval_dict[sym] for sym in all_symbols]
+    return [ numeric_funcs[target](*args) for target in targets ]
+
+# Test cases
+temps = np.linspace(-20, 100, 5)
+voltages = np.linspace(48, 84, 3)
+
+# one, two = compute(
+#     {**material_copper, temperature: temps, current: 150, voltage: voltages, 
+#      length: 2, area_mm2: 100},
+#     [ power_loss_percent, power_loss ],
+# )
+
+# print(one)
+# print(two)
+#+END_SRC
+
+* Cell selection
+Collecting data on the individual cells from https://eu.nkon.nl/
+
+#+NAME: cells
+| Name                 | Price (EUR) | Cap (Ah) | Weight (g) | Max (A) |  Type | Height (mm) | D (mm) |
+|----------------------+-------------+----------+------------+---------+-------+-------------+--------|
+| LG INR18650MH1       |        2.75 |    3.100 |         47 |       6 | 18650 |        64.5 |     18 |
+| Sanyo NCR18650GA     |         3.9 |    3.450 |         47 |      10 | 18650 |          65 |     18 |
+| Keeppower IMR26650   |        8.95 |    5.200 |       93.9 |      15 | 26650 |          67 |     26 |
+| Keeppower 26650      |        9.45 |    5.200 |         97 |      10 | 26650 |             |        |
+| Lishen LR2170SD      |         3.8 |    4.800 |         73 |     9.6 | 21700 |        70.9 |   21.7 |
+| Samsung INR21700     |        5.65 |    5.200 |         67 |      15 | 21700 |        70.6 |  21.27 |
+| Samsung INR21700-50S |        3.16 |        5 |         72 |      35 | 21700 |        70.6 |  21.25 |
+| Headway LifePO4      |          15 |   10.000 |        346 |      20 | 38120 |             |        |
+
+* Full pack performance/price
+How many cells do I need to go in series to achieve > 3kWh capacity, then calculate max amps, weight etc
+
+#+BEGIN_SRC python :var tab=cells :colnames yes :hlines yes :results table :exports both  :post header(*this*)
+import math
+
+cell_voltage = 4.2
+cell_series = 20
+target_kwh = 3
+
+def process(row):
+    [name, price, capacity, weight, maxA, batt_type, height, diam] = row
+
+    # full battery voltage (aiming for 72/84v)
+    total_voltage = (cell_voltage * cell_series)
+    
+    # required capacity (Ah) of a single series stage to achieve target kWh
+    single_series_ah = (target_kwh * 1000) / total_voltage
+    
+    # number of cells required in each stage
+    P = math.ceil(single_series_ah / capacity)
+    
+    # total battery kWh
+    kWh = (P *  capacity * total_voltage) / 1000
+
+    # total cells in the battery
+    cell_n = P * 20
+
+    # full price, weight
+    total_price = round(cell_n * price)
+    total_weight = round(cell_n * weight) / 1000
+
+    # max safe discharge
+    total_maxA = P * maxA
+
+    return [name, P, kWh, total_price, total_weight, total_maxA, cell_n]
+
+return([['Name', '20SxP', 'kWh', 'Price (EUR)', 'Weight (Kg)', 'Max (A)', 'Cell Count']] + 
+       [process(row) for row in tab])
+
+#+END_SRC
+#+RESULTS:
+| Name                 | 20SxP |    kWh | Price (EUR) | Weight (Kg) | Max (A) | Cell Count |
+|----------------------+-------+--------+-------------+-------------+---------+------------|
+| LG INR18650MH1       |    12 | 3.1248 |         660 |       11.28 |      72 |        240 |
+| Sanyo NCR18650GA     |    11 | 3.1878 |         858 |       10.34 |     110 |        220 |
+| Keeppower IMR26650   |     7 | 3.0576 |        1253 |      13.146 |     105 |        140 |
+| Keeppower 26650      |     7 | 3.0576 |        1323 |       13.58 |      70 |        140 |
+| Lishen LR2170SD      |     8 | 3.2256 |         608 |       11.68 |    76.8 |        160 |
+| Samsung INR21700     |     7 | 3.0576 |         791 |        9.38 |     105 |        140 |
+| Samsung INR21700-50S |     8 |   3.36 |         506 |       11.52 |     280 |        160 |
+| Headway LifePO4      |     4 |   3.36 |        1200 |       27.68 |      80 |         80 |
+
+Samsung INR21700 seems most promising:
+- low price
+- only 8 cells in series
+- best performance in terms of max output (A) (implies very fast charging as well)
+Building a 8P20S battery,
+Max continuous discharge of 150A giving 7.2/8.4kw - 10/12.6kw
+  
+* Thermal performance of the cells
+Since only 8P is used we have high per-cell discharge rate which might cause thermal issues
+
+#+BEGIN_SRC python :results table :session battcalc :exports both :post header(*this*)
+from sympy import Symbol, solve, expand, pi, lambdify
+
+# Base parameters as symbols
+# Geometric parameters
+cell_d_mm = Symbol('cell_d_mm')    # diameter (mm)
+cell_h_mm = Symbol('cell_h_mm')    # height (mm)
+cell_r_mm = cell_d_mm/2            # radius (mm)
+cell_r_m = cell_r_mm / 1000        # radius (m)
+cell_d_m = cell_d_mm / 1000        # diameter (m)
+cell_h_m = cell_h_mm / 1000        # height (m)
+
+# Pack configuration
+n_parallel = Symbol('n_p')         # number of cells in parallel
+n_series = Symbol('n_s')           # number of cells in series
+current = Symbol('I')              # total current (A)
+
+# Cell electrical properties
+cell_ir = Symbol('R_cell')         # internal resistance per cell (ohm)
+voltage = Symbol('V')              # cell voltage (V)
+cell_capacity = Symbol('C_cell')   # cell capacity (Ah)
+
+# Thermal properties
+temperature = Symbol('T')          # cell temperature (°C)
+ambient_temp = Symbol('T_a')       # ambient temperature (°C)
+cell_mass = Symbol('m_cell')       # cell mass (kg)
+spec_heat = Symbol('c_p')          # specific heat capacity (J/kg°C)
+thermal_cutoff = Symbol('T_max')   # thermal cutoff temperature (°C)
+thermal_release = Symbol('T_rel')  # thermal release temperature (°C)
+heat_transfer_coeff = Symbol('h')  # heat transfer coefficient W/(m²·K)
+
+# Core relationships
+cells_total = n_series * n_parallel
+current_per_cell = current / n_parallel
+
+pack_voltage = n_series * voltage
+pack_power = current * pack_voltage
+
+# Power and heat calculations
+cell_power_loss = current_per_cell**2 * cell_ir
+pack_power_loss = cell_power_loss * cells_total
+pack_power = current * pack_voltage
+efficiency = (pack_power - pack_power_loss) / pack_power * 100
+
+# Temperature calculations
+cell_surface_area = 2 * pi * cell_r_m**2 + 2 * pi * cell_r_m * cell_h_m
+temp_rise = cell_power_loss / (heat_transfer_coeff * cell_surface_area)
+
+# Time to thermal cutoff calculation
+thermal_time = (cell_mass * spec_heat * (thermal_cutoff - ambient_temp)) / cell_power_loss
+
+# Environment specification
+env_spec = {
+    ambient_temp: 40,
+    heat_transfer_coeff: 10  # W/(m²·K) for natural convection
+}
+
+# Battery pack configuration
+pack_spec = {
+    n_parallel: 8,
+    n_series: 20,
+    cell_d_mm: 21,
+    cell_h_mm: 70
+}
+
+# Cell specifications (Samsung 50S as default)
+cell_spec = { 
+    cell_ir: 0.014,          # 14mΩ internal resistance
+    cell_mass: 0.072,        # kg
+    voltage: 3.6,            # V
+    cell_capacity: 5.0,      # Ah
+    spec_heat: 850,          # J/kg°C
+    thermal_cutoff: 80,      # °C
+    thermal_release: 60      # °C
+}
+
+def format_time(x, _=None):
+    if x < 60:
+        return f'{x*60:.0f}s'
+    elif x < (3600):
+        minutes = x / 60
+        return f'{minutes:.0f}min'
+    else:
+        hours = x/(3600)
+        if hours < 24:
+            return f'{hours:.1f}h'
+        else:
+            days = hours/24
+            return f'{days:.1f}d'
+
+# def calculate_losses(total_current):
+#     """Calculate losses for a given current"""
+#     subs_dict = {**cell_spec, **pack_spec, **env_spec, current: total_current}
+#     heat_per_cell = cell_power_loss.subs(subs_dict)
+#     total_heat = pack_power_loss.subs(subs_dict)
+#     eff = efficiency.subs(subs_dict)
+#     temp_increase = temp_rise.subs(subs_dict)
+#     time_to_cutoff = thermal_time.subs(subs_dict)
+#     power = pack_power.subs(subs_dict)
+#     voltage = pack_voltage.subs(subs_dict)
+
+#     print(f"At {int(power)}W")
+#     print(f"Total current: {total_current}A at {int(voltage)}V")
+#     print(f"Current per cell: {total_current/pack_spec[n_parallel]:.2f}A")
+#     print(f"Heat generation per cell: {heat_per_cell:.2f}W")
+#     print(f"Pack efficiency: {eff:.2f}%")
+#     print(f"Estimated temp rise above ambient: {temp_increase:.2f}°C")
+#     print(f"Time to reach {cell_spec[thermal_cutoff]}°C (no cooling): {format_time(float(time_to_cutoff))}")
+#     print("")
+
+    
+# # Example usage with different currents
+# for test_current in [50, 100, 150]:
+#     calculate_losses(test_current)
+    
+import numpy as np
+import math
+
+current_range = np.linspace(50, 200, 4)
+rows = []
+vals = { **cell_spec, **pack_spec, **env_spec, current: current_range}
+
+
+def round_row(*row):
+    return [ f"{item:.2f}" for item in row]
+
+headers = ["I (A)", "Out (kW)", "T(overload)", "η (%)", "cell loss (W)", "pack loss (W)"]
+rows = compute(vals, [ pack_power, thermal_time, efficiency, cell_power_loss, temp_rise ])
+rows[0] = map(lambda x: x/1000, rows[0])
+rows[1] = map(format_time, rows[1])
+rows[2] = map(int, rows[2])
+rows[3] = map(lambda x: f"{x:.2f}", rows[3])
+rows[4] = map(lambda x: f"{x:.2f}", rows[4])
+
+[headers, *zip(current_range, *rows)]
+#+END_SRC
+
+#+RESULTS:
+| I (A) | Out (kW) | T(overload) | η (%) | cell loss (W) | pack loss (W) |
+|-------+----------+-------------+-------+---------------+---------------|
+|  50.0 |      3.6 | 1.2h        |    97 |          0.55 |         10.30 |
+| 100.0 |      7.2 | 19min       |    95 |          2.19 |         41.19 |
+| 150.0 |     10.8 | 8min        |    92 |          4.92 |         92.68 |
+| 200.0 |     14.4 | 5min        |    90 |          8.75 |        164.76 |
+
+_calculate current per cell for each of those_
+
+
+#+BEGIN_SRC python :results file :session battcalc :exports both
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator, FuncFormatter, LogLocator
+from matplotlib.style import library
+
+print(plt.rcParams.keys())
+
+colors = {
+    "orange": "#ffa500",
+    "lightblue": '#adf7f6',
+    "blue": '#469ecc',
+    "red": "#fd5548",
+    "green": "#73e3bb"
+}
+
+print(library['dark_background'])
+style = {
+    ,**library['dark_background'],
+    
+    # Frame (spines)
+    'axes.spines.top': True,
+    'axes.spines.right': True,
+    'axes.spines.left': True,
+    'axes.spines.bottom': True,
+    'figure.facecolor': (0,0,0,0),
+    'axes.facecolor': '#141d22',
+    'axes.linewidth': 1.5,
+    'axes.xmargin': 0.05,
+    'axes.ymargin': 0.05,
+    'axes.zmargin': 0.05,
+
+    # legend
+    'legend.fontsize': 'large',
+    'legend.title_fontsize': 'large',
+    'legend.fancybox': False,
+    'legend.edgecolor': colors["blue"],
+    'legend.borderaxespad': 0.5,
+    
+    # Grid
+    'axes.edgecolor': colors["blue"],
+    'axes.labelcolor': colors["green"],
+    'axes.labelsize': 17,
+    'axes.grid': True,
+
+    
+    'xtick.color': colors["lightblue"],
+    'ytick.color': colors["lightblue"],
+    
+    'axes.labelpad': 10,
+    'xtick.major.pad': 10,
+    'ytick.major.pad': 10,
+
+    'grid.alpha': 0.33,
+    'grid.linestyle': ':',
+    'grid.linewidth': 1,
+    'grid.color': colors["blue"],
+    
+    # Minor grid
+    'axes.grid.which': 'major',  # 'major', 'minor', or 'both'
+    
+}
+
+# Setup plot style
+plt.style.use(style)
+plt.rcParams['font.family'] = 'monospace'
+plt.rcParams['font.size'] = 15
+
+# Create figure with multiple subplots
+fig, (ax1, ax3) = plt.subplots(2, 1, figsize=(12, 14))
+ax2 = ax1.twinx()
+
+# Define current range (starting from small non-zero value)
+currents = np.linspace(40, 190, 100)
+
+# Base substitution dictionary (everything except current and cell_ir)
+base_subs = {
+    ,**pack_spec,
+    ,**env_spec,
+    ,**{k: v for k, v in cell_spec.items() if k != cell_ir}
+}
+
+# Calculate for different internal resistances
+for ir_mult in [0.8, 1.0, 1.2, 1.4]:
+    # Create substitution dictionary with current IR value
+    ir_value = cell_spec[cell_ir] * ir_mult
+    
+    # Arrays to store results
+    pack_losses_arr = []
+    efficiency_arr = []
+    time_to_80deg_arr = []
+    
+    # Calculate values for each current
+    for current_val in currents:
+        # Complete substitution dictionary for this calculation
+        subs = {
+            ,**base_subs,
+            current: current_val,
+            cell_ir: ir_value
+        }
+        
+        # Calculate using SymPy expressions
+        pack_losses_val = float(pack_power_loss.subs(subs))
+        efficiency_val = float(efficiency.subs(subs))
+        thermal_time_val = float(thermal_time.subs(subs))
+        
+        pack_losses_arr.append(pack_losses_val)
+        efficiency_arr.append(efficiency_val)
+        time_to_80deg_arr.append(thermal_time_val)
+    
+    # Convert to numpy arrays
+    pack_losses_arr = np.array(pack_losses_arr)
+    efficiency_arr = np.array(efficiency_arr)
+    time_to_80deg_arr = np.array(time_to_80deg_arr)
+    
+    # Plot power losses and efficiency
+    line1 = ax1.plot(
+        currents, 
+        pack_losses_arr,
+        linewidth=2,
+        label=f'{ir_value*1000:.1f}mΩ'
+    )
+    
+    line2 = ax2.plot(
+        currents,
+        efficiency_arr,
+        linewidth=2,
+        alpha=0.75,
+        linestyle='--'
+    )
+    
+    # Plot time to reach 80°C
+    line3 = ax3.plot(
+        currents,
+        time_to_80deg_arr/60,  # Convert to minutes
+        linewidth=2,
+        label=f'{ir_value*1000:.1f}mΩ'
+    )
+
+
+# Configure top plot
+ax1.set_xlabel('Pack Current (A)')
+ax1.set_ylabel('Total Heat Generation (Watts)')
+ax2.set_ylabel('Pack Efficiency (%)', color=colors["red"])
+
+ax1.axvline(x=150, color=colors["red"], linestyle='--', alpha=0.75, label='Max')
+ax1.axvline(x=100, color=colors["orange"], linestyle='--', alpha=0.75, label='High')
+ax1.axvline(x=50, color=colors["green"], linestyle='--', alpha=0.75, label='Normal')
+
+# Configure bottom plot
+ax3.set_xlabel('Pack Current (A)')
+ax3.set_ylabel('Time to reach 80°C (minutes)')
+ax3.set_yscale('log')  # Use log scale for time
+ax3.yaxis.set_major_formatter(FuncFormatter(format_time))
+ax3.yaxis.set_major_locator(LogLocator(base=1.1))
+
+
+# Add grids
+#alpha = 0.5
+#ax1.grid(True, which="major", marker="X")
+ax2.grid(False)
+ax2.spines['top'].set_visible(False)
+ax2.spines['right'].set_visible(False)
+ax2.spines['bottom'].set_visible(False)
+ax2.spines['left'].set_visible(False)
+#ax3.grid(True, which="major", ls="-")
+#ax3.grid(True, which="minor", ls=":")
+
+ax3.axvline(x=150, color=colors["red"], linestyle='--', alpha=0.75, label='Max')
+ax3.axvline(x=100, color=colors["orange"], linestyle='--', alpha=0.75, label='High')
+ax3.axvline(x=50, color=colors["green"], linestyle='--', alpha=0.75, label='Normal')
+
+
+# Set axis intervals
+ax1.xaxis.set_major_locator(MultipleLocator(10))
+ax1.yaxis.set_major_locator(MultipleLocator(200))
+ax3.xaxis.set_major_locator(MultipleLocator(20))
+
+# Add legends
+# legend1 = ax1.legend(title='Cell Internal Resistance', loc='upper right')
+# legend3 = ax3.legend(title='Cell Internal Resistance', loc='upper right')
+# frame1 = legend1.get_frame()
+# frame3 = legend3.get_frame()
+# frame1.set_facecolor('none')
+# frame1.set_facecolor((0, 0, 0.01, 0.5))
+# frame3.set_facecolor((0, 0, 0.01, 0.5))
+
+plt.tight_layout()
+
+# Save and return
+plt.savefig('./graph/battery_thermal.svg', dpi=150, bbox_inches='tight', format='svg', transparent=False)
+'./graph/battery_thermal.svg'
+#+END_SRC
+#+RESULTS:
+[[file:./graph/battery_thermal.svg]]
+
+These are for static air, this seems promising given I create airflow
+
+* Copper bus bar and cabling
+
+We need to determine optimal current density (A/mm²)
+
+- Constraints here are cable temperature increase and energy loss (W)
+- Copper resistivity at 20°C (ρ₀) = 1.68 * 10⁻⁸Ωm (or 0.0168 Ω⋅mm²/m)
+- Resistivity scales linearly with temperature ρ(T) = ρ₀[1 + α(T - T₀)]
+
+Building a model of the wire using sympy
+
+#+BEGIN_SRC python :results none :exports code :session battcalc
+from sympy import Symbol, solve, init_printing, expand, sqrt, pi
+from sympy.utilities.lambdify import lambdify
+
+# Define base physical parameters as symbols
+length = Symbol('L')        # meters
+area_mm2 = Symbol('A')      # mm²
+temperature = Symbol('T')   # °C
+current = Symbol('I')       # Amperes
+voltage = Symbol('V')       # Volts
+rho_0 = Symbol('ρ')         # resistivity
+alpha = Symbol('α')         # temperature coefficient
+delta_T = Symbol('ΔT')      # temperature change
+
+# Constants
+# Copper
+rho_copper = 1.68e-8     # Reference resistivity
+alpha_copper = 0.00393   # Temperature coefficient
+material_copper = { rho_0: rho_copper, alpha: alpha_copper }
+
+# Nickel
+rho_nickel = 6.99e-8      # Reference resistivity
+alpha_nickel = 0.006      # Temperature coefficient
+material_nickel = { rho_0: rho_nickel, alpha: alpha_nickel }
+
+heat_transfer_coefficient = 5  # W/(m²·°C)
+T_0 = 20                       # Reference temperature
+
+# Core relationships
+area_m2 = area_mm2 * 1e-6
+resistivity = rho_0 * (1 + alpha * (temperature - T_0))
+resistance = (resistivity * length) / area_m2
+resistance_mili = resistance * 1000
+power_loss = current**2 * resistance
+current_density = current / area_mm2
+power = current * voltage
+power_loss_percent = (power_loss / power) * 100
+diameter_mm = sqrt(area_mm2 / pi) * 2
+diameter_m = diameter_mm * 1e-3
+surface_area = pi * diameter_m * length
+delta_t = (resistance * current * current) / (surface_area * heat_transfer_coefficient)
+
+# Running some tests
+import numpy as np
+import inspect
+
+print(resistance.subs([(temperature, 30), (length, 2), (area_mm2, 100)]))
+
+resistance_fn = lambdify([length, area_mm2, temperature], resistance)
+print(inspect.signature(resistance_fn))
+print(resistance_fn(2, 100, np.linspace(-20,100,5)))
+#+END_SRC
+
+How do the power losses change with ambient temperatures and cable cross section?
+
+- temp: [-20°C, 100°C]
+- cable crosssection: [25mm², 200mm²]
+- length: 2m
+- power 12kW (where I = 150A, V = 84V)
+
+#+BEGIN_SRC python :results file :exports both :session battcalc
+
+# Define parameter ranges
+values = {
+    ,**material_copper,
+    area_mm2: np.linspace(25, 200, 20),
+    current: 150,
+    voltage: 84,
+    length: 2
+ }
+
+# Create figure with primary and secondary y-axes
+fig, ax1 = plt.subplots(figsize=(12, 7))
+ax2 = ax1.twinx()
+
+# Plot lines for each temperature
+for temp in np.linspace(-20, 100, 4):
+    loss, perc = compute({ **values, temperature: temp }, [ power_loss, power_loss_percent])
+    
+    line1 = ax1.plot(
+        values[area_mm2],
+        loss,
+        linewidth=2, label=f'{temp:.0f}°C')
+    
+    line2 = ax2.plot(
+        values[area_mm2],
+        perc,
+        linewidth=0, color='orange')
+
+# Configure axes
+ax1.set_xlabel('Cable Cross-sectional Area (mm²)')
+ax1.set_ylabel('Power Loss (Watts)')
+ax2.set_ylabel('Loss Percentage (%)', color=colors["red"])
+
+# Add grid
+ax1.grid(True, which="major", ls="-", alpha=0.3)
+ax1.grid(True, which="minor", ls=":", alpha=0.2)
+ax2.grid(False)
+ax2.spines['top'].set_visible(False)
+ax2.spines['right'].set_visible(False)
+ax2.spines['bottom'].set_visible(False)
+ax2.spines['left'].set_visible(False)
+
+# Set axis intervals
+ax1.xaxis.set_major_locator(MultipleLocator(10))
+ax1.yaxis.set_major_locator(MultipleLocator(5))
+
+# Add legend
+legend = ax1.legend(title='Ambient Temperature', loc='upper right')
+frame = legend.get_frame()
+#frame.set_facecolor('#010101')
+
+plt.tight_layout()
+
+
+# Save and return
+plt.savefig('./graph/cable_losses.svg', dpi=150, bbox_inches='tight', format='svg', transparent=False)
+'./graph/cable_losses.svg'
+#+END_SRC
+
+#+RESULTS:
+[[file:./graph/cable_losses.svg]]
+
+Ambient temperature doesn't seem important. We'll analize the system at 60 degrees from now on, 2 meters length.
+
+#+BEGIN_SRC python :results table :exports both :session battcalc :results table :post header(*this*)
+import numpy as np
+
+values = {
+    **material_copper,
+    current: 150,
+    voltage: 84,
+    temperature: 60,
+    length: 2,
+ }
+
+def round_row(*row):
+    return [ f"{item:.2f}" for item in row]
+
+headers = ["mm²", "A/mm²", "diam (mm)", "Loss (W)", "Loss (%)", "ΔT (°C)"]
+rows = []
+for area in np.linspace(25, 150, 6):
+    vals = compute(
+        { **values, area_mm2: area },
+        [ current_density, diameter_mm, power_loss, power_loss_percent, delta_t ])
+
+    rows.append(round_row(area, *vals))
+
+
+# Return formatted table
+[headers, *rows]
+#+END_SRC
+#+RESULTS:
+|    mm² | A/mm² | diam (mm) | Loss (W) | Loss (%) | ΔT (°C) |
+|--------+-------+-----------+----------+----------+---------|
+|  25.00 |  6.00 |      5.64 |    34.99 |     0.28 |  197.43 |
+|  50.00 |  3.00 |      7.98 |    17.50 |     0.14 |   69.80 |
+|  75.00 |  2.00 |      9.77 |    11.66 |     0.09 |   38.00 |
+| 100.00 |  1.50 |     11.28 |     8.75 |     0.07 |   24.68 |
+| 125.00 |  1.20 |     12.62 |     7.00 |     0.06 |   17.66 |
+| 150.00 |  1.00 |     13.82 |     5.83 |     0.05 |   13.43 |
+
+We are well within the safety margins.
+
+- 3.0A per mm² gives us 0.14% losses, wasting 17.5W
+- 2.0A per mm² gives us 0.09% losses, wasting 11.5W
+- 1.5A per mm² gives us 0.07% losses, wasting 8.75W
+- 1.0A per mm² gives us 0.05% losses, wasting 5.8W
+
+Seems ok with 50 mm² and above, so 8mm inner cable diameter.
+(keep in mind 150A is 13kw so these are 0.14% losses at peaks)
+
+_goal for the rest of the system will be >0.15% losses at peaks_
+
+* Aluminium Bus Bar
+Even though copper has a long history as the material of choice for conducting electricity, aluminum has certain advantages that make it attractive for specific applications.
+https://www.anixter.com/en_us/resources/literature/wire-wisdom/copper-vs-aluminum-conductors.html
+
+Aluminum has 61 percent of the conductivity of copper, but has only 30 percent of the weight of copper. That means that a bare wire of aluminum weighs half as much as a bare wire of copper that has the same electrical resistance. Aluminum is generally more inexpensive when compared to copper conductors.
+
+- I guess depends on mechanical properties, weight, price and spot welding
+
+
+* 3D Models
+We define some 3d manipulation functions and test them by building a rough cell positioning for a full pack
+#+view: ./3d/batts.png 0,0,0,0,0,0,300
+#+begin_src scadclj :exports code :axes t :session batt
+; all our objects know their own dimensions
+; (so that we can build auto-stacking functions)
+(defrecord Obj [dims obj])
+(defrecord NamedObj [name dims obj])
+
+; individual samsung cell dimensions
+(def cellSpec (atom { :r 10.625 :height 70.7 }))
+(swap! cellSpec assoc :d (* (:r @cellSpec) 2))
+
+; individual parallel group stacking settings (8P)
+(def cellGroupSpec (atom { :xn 3 :yn 3 :space 5 }))
+
+; full battery pack stacking settings (20S8P)
+(def packSpec (atom { :xn 4 :yn 5 :space 20 }))
+
+(def cellObj
+  (let [r (:r @cellSpec) d (* r 2) height (:height @cellSpec) green [0.6 1 0.6 0.5]]
+    (->Obj [ d d height ]
+        (union (color green (cylinder r, height)
+        (translate [0, 0, (+ (/ height 2) 1)] (cylinder 5 2)))))))
+
+; basic ops so we don't need to destructure our Obj record
+(defn swap-dims-90 [dims axis]
+  (let [[x y z] dims]
+    (case axis
+      :x [x z y]    ; y->z, z->y
+      :y [z y x]    ; x->z, z->x
+      :z [y x z]))) ; x->y, y->x
+
+(defn swap-dims [dims axis rotations]
+  (nth (iterate #(swap-dims-90 % axis) dims)
+       (mod rotations 4)))
+
+(defn rotateObj [dirs obj]
+  (let [[rx ry rz] dirs
+        angle-x (* (mod rx 4) (/ Math/PI 2))
+        angle-y (* (mod ry 4) (/ Math/PI 2))
+        angle-z (* (mod rz 4) (/ Math/PI 2))
+        new-dims (-> (:dims obj)
+                    (swap-dims :x rx)
+                    (swap-dims :y ry)
+                    (swap-dims :z rz))]
+    (->Obj new-dims 
+           (rotate [angle-x angle-y angle-z] (:obj obj)))))
+
+(defn flipObj [obj] (rotateObj [2 0 0] obj))
+
+(defn translateObj [vector obj] (->Obj (:dims obj) (translate vector (:obj obj))))
+
+(defn colorObj [newcolor obj] (->Obj (:dims obj) (color newcolor (:obj obj))))
+
+(defn overrideDims [dimsObj targetObj] (->Obj (:dims dimsObj) (:obj targetObj)))
+
+(defn unionObj [objs]
+  (->Obj (:dims (first objs))
+         (apply union (map :obj objs))))
+
+; main object stacking function
+(defn pairObj [dimension distance obj1 obj2]
+  ;(println "// Input objects dims:" (:dims obj1) (:dims obj2))
+  ; First calculate total dims
+  (let [distance-vec (mapv #(if (zero? %) 0 (* % distance)) dimension)
+        total-dims (mapv + 
+                        (mapv * dimension (:dims obj1))
+                        (mapv * dimension (:dims obj2))
+                        distance-vec
+                        (mapv * (mapv #(- 1 %) dimension)
+                              (mapv max (:dims obj1) (:dims obj2))))
+        ;_ (println "// total-dims:" total-dims)
+        
+        ; Get the joining dimension index (0 for x, 1 for y, 2 for z)
+        join-dim (first (keep-indexed #(when (= %2 1) %1) dimension))
+        
+        ; Get sizes in joining dimension
+        total-size (nth total-dims join-dim)
+        obj1-size (nth (:dims obj1) join-dim)
+        obj2-size (nth (:dims obj2) join-dim)
+        
+        ; Calculate offsets in joining dimension
+        obj1-offset (mapv #(if (= % 1) (/ (- total-size obj1-size) 2) 0) dimension)
+        obj2-offset (mapv #(if (= % 1) (/ (- total-size obj2-size) -2) 0) dimension)
+                              
+        ;_ (println "// obj1 translation:" (mapv - obj1-offset))
+        ;_ (println "// obj2 translation:" (mapv - obj2-offset))
+        
+        obj1-trans (translate (mapv - obj1-offset) (:obj obj1))
+        obj2-trans (translate (mapv - obj2-offset) (:obj obj2))]
+    
+    (->Obj total-dims (union obj1-trans obj2-trans))))
+
+
+; like pairObj but it slaps on obj2 without changing Obj record dimensions or position
+(defn slapObj [dimension distance obj1 obj2]
+  (let [distance-vec (mapv #(if (zero? %) 0 (* % distance)) dimension)
+        total-dims (mapv + 
+                        (mapv * dimension (:dims obj1))
+                        (mapv * dimension (:dims obj2))
+                        distance-vec
+                        (mapv * (mapv #(- 1 %) dimension)
+                              (mapv max (:dims obj1) (:dims obj2))))
+        ;_ (println "// total-dims:" total-dims)
+        
+        ; Get the joining dimension index (0 for x, 1 for y, 2 for z)
+        join-dim (first (keep-indexed #(when (= %2 1) %1) dimension))
+        
+        ; Get sizes in joining dimension
+        total-size (nth total-dims join-dim)
+        obj1-size (nth (:dims obj1) join-dim)
+        obj2-size (nth (:dims obj2) join-dim)
+        
+        ; Calculate offsets in joining dimension
+        obj1-offset (mapv #(if (= % 1) (/ (- total-size obj1-size) 2) 0) dimension)
+        obj2-offset (mapv #(if (= % 1) (/ (- total-size obj2-size) -2) 0) dimension)
+                              
+        ;_ (println "// obj1 translation:" (mapv - obj1-offset))
+        ;_ (println "// obj2 translation:" (mapv - obj2-offset))
+        
+        obj1-trans (translate (mapv - obj1-offset) (:obj obj1))
+        obj2-trans (translate (mapv - obj2-offset) (:obj obj2))]
+    
+    (->Obj total-dims (union obj1-trans obj2-trans))))
+
+
+; table print helpers
+(defn printDimsHeader []
+  (println "| Name | dimX (mm) | dimY (mm) | dimZ (mm) | Vol (cm3) |")
+  (println "|-"))
+
+(defn printDim [name obj]
+  (let [
+        volume (/ (reduce * (:dims obj)) 1000)
+        row (vec (concat [name] (:dims obj) [volume]))
+        ]
+  (println "|" (apply str (interpose "|" row )))))
+
+
+(defn printDims [& args]
+  (printDimsHeader)
+  (doseq [[name obj] (partition 2 args)]
+    (printDim name obj)))
+
+
+; color helpers
+(defn hex-to-rgb
+  "Convert a hex color string (e.g., \"#adf7f6\") to a normalized RGB vector [r g b]
+   where each component is normalized to [0, 1]"
+  [hex-str]
+  (let [hex (if (= (first hex-str) \#)
+              (subs hex-str 1)
+              hex-str)
+        rgb-int (Integer/parseInt hex 16)
+        r (bit-shift-right (bit-and rgb-int 0xFF0000) 16)
+        g (bit-shift-right (bit-and rgb-int 0x00FF00) 8)
+        b (bit-and rgb-int 0x0000FF)]
+    [(/ r 255.0) (/ g 255.0) (/ b 255.0)]))
+
+(def red (hex-to-rgb "#fd5548"))
+(def green (hex-to-rgb "#73e3bb"))
+(def blue (hex-to-rgb "#469ecc"))
+(def lightblue (hex-to-rgb "#adf7f6"))
+(def orangeblue (hex-to-rgb "#ffa500"))
+
+;(def testObj1 (->Obj [25 25 25] (color [1 0 0] (cube 25 25 25))))
+;(def testObj2 (->Obj [10 10 10] (color [0 1 0] (cube 10 10 10))))
+
+;(:obj (pairObj [0 0 1] 10 testObj1 testObj2))
+;(defn objF [] testObj2)
+;(:obj (seqObj [0 0 1] 10 [testObj2 testObj1 testObj2]))
+(defn seqObj [dimension distance objs]
+  (reduce (fn [acc obj] (pairObj dimension distance acc obj)) (first objs) (rest objs)))
+
+
+
+(defn previewObj [distance obj]
+  (let [rot (/ Math/PI 4)]
+          (:obj (unionObj [
+           (translateObj [distance 0 distance] obj)
+           (translateObj [(* distance 1) 0 (* distance -1)] (rotateObj [1 0 0] obj))
+           (translateObj [(* distance -1) 0 (* distance -1)] (rotateObj [3 0 1] obj))
+           (translateObj [(* distance -1) 0 (* distance 1)]
+                         (->Obj (:dims obj) (rotate [rot 0 0] (rotate [0 0 rot] (:obj obj)))))
+]))))
+
+
+(defn repeatObj [dimension distance n obj] (seqObj dimension distance (repeat n obj)))
+
+
+(defn xyGrid [dist xn yn obj]
+    (seqObj [1 0 0] dist
+    (repeat xn (seqObj [0 1 0] dist (repeat yn obj)))))
+
+(def parallelCellsObj (xyGrid (:space @cellGroupSpec) (:xn @cellGroupSpec) (:yn @cellGroupSpec) cellObj))
+
+(def packObj (xyGrid (:space @packSpec) (:xn @packSpec) (:yn @packSpec) parallelCellsObj))
+
+#+end_src
+
+Investigating different pack formats
+
+#+view: ./3d/packs2.png
+#+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
+(def rotCellObj (rotateObj [ 0 0 1 ] parallelCellsObj))
+
+(def pack1 (rotateObj [0 0 1] packObj))
+
+; (println "// pack1 dimensions: " (:dims pack1))
+
+(def pack2
+; (repeatObj [1 0 0] 20 2
+ (rotateObj [1 0 1] (repeatObj [1 0 0] 20 4
+ (rotateObj [0 0 1] (repeatObj [0 0 1] 5 5 rotCellObj)))));)
+
+;(println "// pack2 dimensions: " (:dims  (rotateObj [1 0 0] pack2)))
+
+(def pack3
+; (repeatObj [1 0 0] 20 2
+ (rotateObj [1 0 0]
+            (repeatObj [1 0 0] 20 5
+ (rotateObj [0 0 0] (repeatObj [0 0 1] 5 4 rotCellObj)))));)
+
+; (println "// pack3 dimensions: " (:dims  (rotateObj [1 0 0] pack3)))
+
+(def pack4
+  (repeatObj [0 0 1] 20 2
+  (repeatObj [1 0 0] 20 2 
+  (repeatObj [0 1 0] 20 5 parallelCellsObj))))
+
+; (println "// pack4 dimensions: " (:dims pack3))
+
+(defn frame [x y z thicc]
+  (->Obj [x y thicc]
+  (let [x2 (/ x -2)
+        y2 (/ y 2)
+        z2 (/ z 2)]
+    (union
+     (translate [0 y2 z2] (cube x thicc z))
+     (translate [x2 0 z2] (cube thicc y z))
+     (cube x y thicc))
+)))
+
+(def battCase (colorObj [0.25 0.25 0.25 0.5] (frame 350 500 195 3)))
+
+(previewObj 300 (slapObj [0 0 1] 0 battCase pack1))
+
+(:obj (seqObj [1 0 0] 100 [pack1 pack2 pack3 pack4 ]))
+#+end_src
+#+RESULTS:
+:results:
+[[././3d/packs2.png]]
+:end:
+
+
+#+begin_src scadclj :exports both :session batt :codefile code.clj :results output table :scadfile code.scad
+(printDims "bc" battCase "p1" pack1 "p2" pack2 "p3" pack3 "p4" pack4)
+#+end_src
+
+#+RESULTS:
+:results:
+| Name | dimX (mm) | dimY (mm) | dimZ (mm) | Vol (cm3) |
+|------+-----------+-----------+-----------+-----------|
+| bc   |       350 |       500 |         3 |       525 |
+| p1   |     317.5 |     460.0 |      70.7 | 10325.735 |
+| p2   |     373.5 |     460.0 |      47.5 |  8160.975 |
+| p3   |     250.0 |     373.5 |     100.0 |    9337.5 |
+| p4   |     220.0 |     317.5 |     161.4 |  11273.79 |
+:end:
+
+  actually pack2/3 seem very interesting, why is this an uncommon format for high output batteries?
+  
+* Pack 1 Option
+
+** Model
+#+view: ./3d/pack1.png 0,0,0,90,0,0,3000
+#+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
+(previewObj 300 pack1)
+#+end_src
+
+#+RESULTS:
+:results:
+[[././3d/pack1.png]]
+:end:
+
+#+view: ./3d/pack1_full.png
+#+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
+(:obj (slapObj [0 0 1] 0 battCase pack1))
+#+end_src
+
+#+RESULTS:
+:results:
+[[././3d/pack1_full.png]]
+:end:
+
+** Details
+#+begin_src scadclj :exports both :session batt :codefile code.clj :results output table :scadfile code.scad
+(printDims "bc" battCase "p1" pack1)
+#+end_src
+
+#+RESULTS:
+:results:
+| Name | dimX (mm) | dimY (mm) | dimZ (mm) | Vol (cm3) |
+|------+-----------+-----------+-----------+-----------|
+| bc   |       350 |       500 |         3 |       525 |
+| p1   |     317.5 |     460.0 |      70.7 | 10325.735 |
+:end:
+
+*** Thermals
+- Probably speed controlled server rack fans
+- just leave space for fans for now, see thermal perforamnce later
+- probably need some airflow though, figure out how to deal with water ingress etc
+  
+*** Fusing
+- hopefully appropriate Nikel width can be decided upon, I assume nickel is not the best fusing material but will work.
+
+** Bus Bar 1 Design
+#+view: ./3d/horizBusPack.png
+#+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
+; specification for the bus bar construction
+(def busBarSpec (atom
+   {
+    :thicc 3
+    :holespace 2
+    :padding 10
+    :zOffset 0
+    }))
+
+(let [r (+ (:r @cellSpec) (:holespace @busBarSpec)) d (* r 2) thicc ( + (:thicc @busBarSpec) 1)]
+ (def cellHoleObj
+   (->Obj [ (:d @cellSpec) (:d @cellSpec) thicc ] (cylinder r, thicc))))
+
+(def holeGroupObj (xyGrid (:space @cellGroupSpec) (:xn @cellGroupSpec) (:yn @cellGroupSpec) cellHoleObj))
+
+
+(let [parallelCellsDim (:dims parallelCellsObj)
+      
+      padding     (+ (:padding @busBarSpec) (:holespace @busBarSpec))
+      thicc       (:thicc @busBarSpec)
+      zOffset     (:zOffset @busBarSpec)
+      cellHeight  (get parallelCellsDim 2)
+      
+      xDim        (+ (get parallelCellsDim 0) padding)
+      yDim        (+ (get parallelCellsDim 1) padding)
+      
+      ; copperColor [0.9 0.55 0.3]]
+      copperColor (hex-to-rgb "#ffa500")]
+  
+      (println "// dims" xDim yDim thicc)
+
+(def busBarObj
+  (->Obj [xDim yDim thicc]
+         (color copperColor (translate [0 0 (+ zOffset)]
+         (difference
+           (cube xDim yDim thicc)
+           (:obj holeGroupObj))))))
+
+;(def parallelCellsObj (xyGrid (:space @cellGroupSpec) (:xn @cellGroupSpec) (:yn @cellGroupSpec) cellObj))
+
+(def nickelStripObj
+  (let [
+      nickelWidth   8
+      nickelLength  xDim
+      nickelThicc   1
+      nickelColor   [0.7 0.7 0.7]
+        ]
+                           ; "virtual" Y thickness for easy assembly
+      (->Obj [nickelLength (:d @cellSpec) nickelThicc]
+             (color nickelColor (cube nickelLength nickelWidth nickelThicc)))))
+
+(def nickelStripSpacerObj
+  (let [
+      nickelWidth   8
+      nickelLength (- (:space @packSpec) padding)   
+      nickelThicc   1
+      nickelColor   [0.7 0.7 0.7]
+        ]
+                           ; "virtual" Y thickness for easy assembly
+      (->Obj [nickelLength (:d @cellSpec) nickelThicc]
+             (color nickelColor (cube nickelLength nickelWidth nickelThicc)))))
+
+(def nickelStripsObj (pairObj [0 1 0] (:space @cellGroupSpec) nickelStripObj nickelStripObj))
+(def nickelStripsSpacerObj (pairObj [0 1 0] (:space @cellGroupSpec) nickelStripSpacerObj nickelStripSpacerObj))
+(def busBarNickelObj (pairObj [0 0 1] 0 busBarObj nickelStripsObj ))
+
+(def busBarPairX
+  (let [
+        midSpace (- (:space @packSpec) padding)
+        width (nth (:dims busBarObj) 1)
+        spacer (->Obj [midSpace width thicc] (color copperColor (cube midSpace width thicc)))
+        joinedBusBar (seqObj [1 0 0] 0 [busBarObj spacer busBarObj])
+        joinedNickelStrips (seqObj [1 0 0] 0 [nickelStripsObj nickelStripsSpacerObj nickelStripsObj])
+        ]
+    ;joinedNickelStrips
+    (pairObj [0 0 1] 0 joinedBusBar joinedNickelStrips)
+))
+
+(def test2SX (pairObj [1 0 0] (:space @packSpec) parallelCellsObj (flipObj parallelCellsObj)))
+
+(def testBusBars2SX (pairObj [0 0 1] 0.1 test2SX busBarPairX))
+
+(def busBarPairY
+  (let [
+        midSpace (- (:space @packSpec) padding)
+        width (nth (:dims busBarObj) 0)
+        spacer (->Obj [width midSpace thicc] (color copperColor (cube width midSpace thicc)))
+        joinedBusBar (seqObj [0 1 0] 0 [busBarObj spacer busBarObj])
+        joinedNickelStrips (pairObj [0 1 0] (:space @packSpec) nickelStripsObj nickelStripsObj)
+        ]
+    (pairObj [0 0 1] 0 joinedBusBar joinedNickelStrips)))
+)
+  
+(def test2S (pairObj [0 1 0] (:space @packSpec) parallelCellsObj (flipObj parallelCellsObj)))
+
+(def testBusBars2S (pairObj [0 0 1] 0.1 test2S busBarPairY))
+
+;(:obj testBusBars2S)
+
+(let [
+      thicc (nth (:dims busBarPairY) 2)
+      moveZ (+ 0.1 (/ (nth (:dims parallelCellsObj) 2) 2))
+      ]
+(def pack1STermObj
+   (->Obj (:dims parallelCellsObj)
+          (union (:obj parallelCellsObj) (translate [0 0 moveZ] (:obj busBarNickelObj))))))
+
+
+(let [
+      thicc (nth (:dims busBarPairY) 2)
+      moveZ (+ 0.1 (/ (nth (:dims parallelCellsObj) 2) 2))
+      moveY (/ (+ (nth (:dims parallelCellsObj) 1) (:space @packSpec)) 2)
+      ]
+(def pack1SYObjTerm
+   (->Obj (:dims parallelCellsObj)
+          (union (:obj parallelCellsObj)
+                 (translate [0 moveY moveZ] (:obj busBarPairY))
+                 (translate [0 0 (* moveZ -1)] (:obj (flipObj busBarNickelObj)))
+                 ))))
+
+
+(let [
+      thicc (nth (:dims busBarPairY) 2)
+      moveZ (+ 0.1 (/ (nth (:dims parallelCellsObj) 2) 2))
+      moveY (/ (+ (nth (:dims parallelCellsObj) 1) (:space @packSpec)) 2)
+      ]
+(def pack1SYObj
+   (->Obj (:dims parallelCellsObj)
+          (union (:obj parallelCellsObj) (translate [0 moveY moveZ] (:obj busBarPairY))))))
+
+(def pack1SObj parallelCellsObj)
+
+(let [
+      thicc (nth (:dims busBarPairY) 2)
+      moveZ (+ 0.1 (/ (nth (:dims parallelCellsObj) 2) 2))
+      moveX (/ (+ (nth (:dims parallelCellsObj) 0) (:space @packSpec)) 2)
+      ]
+(def pack1SXObj
+   (->Obj (:dims parallelCellsObj)
+          (union (:obj parallelCellsObj) (translate [moveX 0 moveZ] (:obj busBarPairX))))))
+
+
+(def pack1SPreview (pairObj [0 1 0] (:space @packSpec) pack1SYObj (rotateObj [0 0 2] parallelCellsObj) ))
+
+(def pack2SObj (pairObj [0 1 0] (:space @packSpec) pack1SYObj (rotateObj [0 0 2] (flipObj pack1SYObj)) ))
+
+(def pack2SObjTerm (pairObj [0 1 0] (:space @packSpec) pack1SYObjTerm (rotateObj [0 0 2] (flipObj pack1SYObj)) ))
+
+(def pack4SObjTerm (pairObj [0 1 0] (:space @packSpec) pack2SObjTerm pack2SObj))
+
+(def pack4SObj (pairObj [0 1 0] (:space @packSpec) pack2SObj pack2SObj))
+
+(def pack5SObj (pairObj [0 1 0] (:space @packSpec) pack4SObj pack1SXObj))
+
+(def pack5SObjTermLast (pairObj [0 1 0] (:space @packSpec) pack4SObjTerm pack1SObj))
+
+(def pack5SObjTerm (pairObj [0 1 0] (:space @packSpec) pack4SObjTerm pack1SXObj))
+
+(def pack10SObj (pairObj [1 0 0] (:space @packSpec) pack5SObj (rotateObj [0 2 2] pack5SObj)))
+
+(def pack20SObj (seqObj [1 0 0] (:space @packSpec)
+   [
+    pack5SObjTerm
+    (flipObj pack5SObj) pack5SObj
+    pack5SObjTermLast
+  ]))
+
+(def pack5SObjPlain
+  (seqObj [0 1 0] (:space @packSpec) [pack1STermObj pack1STermObj pack1STermObj pack1STermObj pack1STermObj]))
+
+(def pack20SObjPlain
+  (seqObj [1 0 0] (:space @packSpec) [pack5SObjPlain pack5SObjPlain pack5SObjPlain pack5SObjPlain]))
+
+;(:obj (rotateObj [0 2 0] pack20SObj))
+;(:obj pack20SObj)
+
+(:obj (slapObj [0 0 1] 0 battCase (rotateObj [0 0 1] pack20SObj)))
+;(:obj testBusBars2SX)
+#+end_src
+#+RESULTS:
+:results:
+[[././3d/horizBusPack.png]]
+:end:
+
+#+view: ./3d/horizBus2S.png 0,0,0,90,0,0,1000
+#+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
+(previewObj 100 testBusBars2S)
+#+end_src
+#+RESULTS:
+:results:
+[[././3d/horizBus2S.png]]
+:end:
+
+** Bus Bar System 1 Notes
+- 2 types, X and Y
+- spot welded to nickel strip
+- this design seems a bit problemtic since neighbouring plates can easily short
+- needs plastic isolation on sides of bus bar to prevent shorts 
+- probably battery is in a sandwich of plexyglass
+
+likely plastic insulation between bus bars can double as a structural frame?
+
+*** Review
+- P-groups are not all the same
+- Structural issues during construction, requires access to top and bottom of P-Groups yet they are not structurally sound without sandwich panels which obstruct access
+- Difficult battery deconstruction
+- Fuses need to connect to bus bar only on one contact point
+
+*** Conclusions
+- Redesign this with bus bars (and balancing leads, fuses) that are embedded into the top/bottom sandwich panels, thus keeping the P-groups same and interchangable
+- Consider aluminium for bus bars (lighter but more volume)
+
+
+** Bus Bar System 2 Design
+
+
+** Bus Bar System 2 Considerations
+
+
+* Pack 3 Option
+** Details
+#+begin_src scadclj :exports both :session batt :codefile code.clj :results output table :scadfile code.scad
+(printDims "bc" battCase "p3" pack3)
+#+end_src
+
+#+RESULTS:
+:results:
+| Name | dimX (mm) | dimY (mm) | dimZ (mm) | Vol (cm3) |
+|------+-----------+-----------+-----------+-----------|
+| bc   |       350 |       500 |         3 |       525 |
+| p3   |     297.8 |    448.75 |     73.75 |      9855 |
+
+:end:
+
+- bus bars are natural and "for free" and their function is only balancing and ideally have minimal current passing through. fusing is still possible but more difficult
+  
+- central area can be a tube for protected balance leads
+  
+- whole pack can be sandwiched using long screws?
+
+*** Fusing
+Seems tricky but is actually doable, bus bars touch for current transfer but cells can be indiviually fused.
+
+*** Structural
+This is the main issue with this pack?
+
+** Model
+#+view: ./3d/pack3.png 0,0,0,90,0,0,3000
+#+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
+(previewObj 300 pack3)
+#+end_src
+
+#+RESULTS:
+:results:
+[[././3d/pack3.png]]
+:end:
+
+#+view: ./3d/pack3_full.png
+#+begin_src scadclj :exports both :axes t :session batt :codefile code.clj :scadfile code.scad
+(:obj (slapObj [0 0 1] 0 battCase (rotateObj [0 0 1] pack3)))
+#+end_src
+
+#+RESULTS:
+:results:
+[[././3d/pack3_full.png]]
+:end:
+** Bus Bar Design
+[[./pack3/][Separate design document for this is here]]
+
+Slightly complex to have stacked per cell fuses but could be doable
+[[./img/sketch_pack3_2.svg]]
+Some concerns with shorting bus bars and cascading failiure, [[./pack3/][check the design doc for details]]
+
+* Other Details
+** Misc safety
+- internal air quality monitoring
+- what is the approach to temperature monitoring given we can't have a sensor on every cell?
+- how are we detecting an unusual temperature response?
+
+
+** Cabling
+- Building 2 batteries, 3.3kWh each (15-20kg each?)
+- Optionally can run on one battery, so independant systems, each battery can take the full 150A load
+- Cabling as a part of the battery itself, plugs on the bike.
+
+** Diagram
+#+BEGIN_SRC diagon :mode GraphDAG :exports results
+battery1 -> esc
+battery2 -> esc
+esc -> motor
+#+END_SRC
+#+RESULTS:
+#+begin_example
+┌────────┐┌────────┐
+│battery1││battery2│
+└┬───────┘└┬───────┘
+┌▽─────────▽┐       
+│esc        │       
+└┬──────────┘       
+┌▽────┐             
+│motor│             
+└─────┘             
+
+#+end_example
+
+** Cables
+minimum 50mm² cables
+**** TODO figure out insulation the material and simulate thermals
+
+** Connectors
+what type of connectors for the battery itself, for the bike?
+
+** Bus bar sizing
+we can go for 75mm²-100mm² just to avoid estimated 70deg heating at peaks within the battery.
+
+20mm x 3-5mm
+or
+30mm x 2-3mm
+
+* Cell level fuse research
+
+_Current conclusion is that worst case some sort of common nickel strips will work well as fuses as well given these are high power cells and will burn the strip in case of a cell level short, but need to confirm with calculations and experiments_
+
+
+*** TODO Figure out a material
+considerations:
+- connection to the cell
+- suitability to a role as a fuse (I assume this is melting point and resistance, anything else?)
+
+*** Aluminium
+Seems like a common material for bus bars in pro setups, can it be used for fusing as well?
+I suspect it won't be solid enough and vibration fatigue might damage thin alu
+
+*** Copper
+Welding to battery
+- TODO spot?
+- TODO laser?
+
+Check:
+#+begin_example
+- https://cellsaviors.com/blog/copper-nickel-sandwich
+- https://cellsaviors.com/blog/can-you-spot-weld-copper
+- https://www.copper.org/applications/marine/cuni/fabrication/joining_welding_cutting_lining.html
+- https://endless-sphere.com/sphere/threads/copper-nickel-sandwich-buses-for-series-connections.108006/
+- https://endless-sphere.com/sphere/threads/spot-welding-copper-strips-to-18650-battery-cells.84680/page-23
+#+end_example
+
+
+*** Nickel
+fuse test video
+https://www.youtube.com/watch?v=BAPHF3Sq2t8
+
+Spot welding to cell is easy
+- TODO welding to copper bus bar?
+
+We expect each of our cells to be able to output 18.75A, how will a 2cm strip of nickel perform here?
+
+#+BEGIN_SRC python :results table :exports both :session battcalc :results table
+import numpy as np
+
+values = {
+    **material_nickel,
+    current: 18.75,
+    voltage: 4.2,
+    temperature: 60,
+    length: 0.02, # 2cm
+ }
+
+def round_row(*row):
+    return [ f"{item:.2f}" for item in row]
+
+headers = ["mm²", "A/mm²", "D (mm)", "Loss (W)", "Loss (%)", "ΔT (°C)"]
+rows = []
+for area in np.linspace(3, 12, 7):
+    vals = compute(
+        { **values, area_mm2: area },
+        [ current_density, diameter_mm, power_loss, power_loss_percent, delta_t ])
+
+    rows.append(round_row(area, *vals))
+
+
+# Return formatted table
+[headers, *rows]
+#+END_SRC
+#+RESULTS:
+|   mm² | A/mm² | D (mm) | Loss (W) | Loss (%) | ΔT (°C) |
+|-------+-------+--------+----------+----------+---------|
+|  3.00 |  6.25 |   1.95 |     0.20 |     0.26 |  330.86 |
+|  4.50 |  4.17 |   2.39 |     0.14 |     0.17 |  180.10 |
+|  6.00 |  3.12 |   2.76 |     0.10 |     0.13 |  116.98 |
+|  7.50 |  2.50 |   3.09 |     0.08 |     0.10 |   83.70 |
+|  9.00 |  2.08 |   3.39 |     0.07 |     0.09 |   63.67 |
+| 10.50 |  1.79 |   3.66 |     0.06 |     0.07 |   50.53 |
+| 12.00 |  1.56 |   3.91 |     0.05 |     0.06 |   41.36 |
+
+Standard nickel strip used in batteries is 8x0.75mm so 6mm² which gives us 3.12A/mm²
+
+Nickel has higher resistance, I'm not confident in my temp calculations but this is worrysome, I need to validate this experimentally. For now I will proceed with the assumption that I can design good nickel fuses
+
+[[https://www.youtube.com/watch?v=cWQWDyBtgTs][soldering video]]
+
+
+* Exports for drawing
+
+#+view: ./3d/drawBatts.png 0,0,0,0,0,0,700
+#+begin_src scadclj :exports results :axes t :session batt :colorscheme Nature
+(def drawPair (pairObj [1 0 0] 20 pack1SPreview pack1SPreview))
+(:obj (pairObj [0 1 0] 20 drawPair drawPair))
+#+end_src
+
+* Resources
+check 
+https://www.youtube.com/watch?v=oNfTEHBz_bg&t=261s
+
+batterydesign.net cylindrical cells, cooling
+https://www.batterydesign.net/battery-cell/formats/cylindrical-cells/
+
+Lucid motors pack
+https://www.batterydesign.net/lucid-motors/ https://www.youtube.com/watch?v=2aDyjJ5wj64
+
+Formula E battery
+https://www.batterydesign.net/formula-e-battery-2019-21/
+
+actually this might be amazing? wtf?
+https://thebatteryshop.eu/EVE-LF100LA-LiFePO4-battery-cell-double-M6-thread
+100A output is a bit on the low end, also a bit scarry that it's an unknown manufacturer
+
+good mounts
+https://ebikestuff.eu/en/20-cell-holders-21700
+
+can weld to alu
+https://thebatteryshop.eu/Glitter-801H-spot-welder
+

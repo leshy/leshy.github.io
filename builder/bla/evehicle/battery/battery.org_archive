@@ -1,0 +1,279 @@
+#    -*- mode: org -*-
+
+
+Archived entries from file /home/self/coding/the-monospace-web/site/evehicle/battery/battery.org
+
+
+* Cell heating and losses
+:PROPERTIES:
+:ARCHIVE_TIME: 2024-12-26 Thu 19:39
+:ARCHIVE_FILE: ~/coding/the-monospace-web/site/evehicle/battery/battery.org
+:ARCHIVE_CATEGORY: battery
+:END:
+Need to figure out what sort of cooling I need for this.
+
+#+BEGIN_SRC python :results output :session battcalc :exports both
+from sympy import Symbol, solve, expand, pi
+
+# Base parameters as symbols
+# Geometric parameters
+cell_d_mm = Symbol('cell_d_mm')    # diameter (mm)
+cell_h_mm = Symbol('cell_h_mm')    # height (mm)
+cell_r_mm = cell_d_mm/2            # radius (mm)
+cell_r_m = cell_r_mm / 1000        # radius (m)
+cell_d_m = cell_d_mm / 1000        # diameter (m)
+cell_h_m = cell_h_mm / 1000        # height (m)
+
+# Pack configuration
+n_parallel = Symbol('n_p')         # number of cells in parallel
+n_series = Symbol('n_s')           # number of cells in series
+current = Symbol('I')              # total current (A)
+
+# Cell electrical properties
+cell_ir = Symbol('R_cell')         # internal resistance per cell (ohm)
+voltage = Symbol('V')              # cell voltage (V)
+cell_capacity = Symbol('C_cell')   # cell capacity (Ah)
+
+# Thermal properties
+temperature = Symbol('T')          # cell temperature (°C)
+ambient_temp = Symbol('T_a')       # ambient temperature (°C)
+cell_mass = Symbol('m_cell')       # cell mass (kg)
+spec_heat = Symbol('c_p')          # specific heat capacity (J/kg°C)
+thermal_cutoff = Symbol('T_max')   # thermal cutoff temperature (°C)
+thermal_release = Symbol('T_rel')  # thermal release temperature (°C)
+heat_transfer_coeff = Symbol('h')  # heat transfer coefficient W/(m²·K)
+
+# Core relationships
+cells_total = n_series * n_parallel
+current_per_cell = current / n_parallel
+
+pack_voltage = n_series * voltage
+pack_power = current * pack_voltage
+
+# Power and heat calculations
+cell_power_loss = current_per_cell**2 * cell_ir
+pack_power_loss = cell_power_loss * cells_total
+pack_power = current * pack_voltage
+efficiency = (pack_power - pack_power_loss) / pack_power * 100
+
+# Temperature calculations
+cell_surface_area = 2 * pi * cell_r_m**2 + 2 * pi * cell_r_m * cell_h_m
+temp_rise = cell_power_loss / (heat_transfer_coeff * cell_surface_area)
+
+# Time to thermal cutoff calculation
+thermal_time = (cell_mass * spec_heat * (thermal_cutoff - ambient_temp)) / cell_power_loss
+
+# Environment specification
+env_spec = {
+    ambient_temp: 40,
+    heat_transfer_coeff: 10  # W/(m²·K) for natural convection
+}
+
+# Battery pack configuration
+pack_spec = {
+    n_parallel: 8,
+    n_series: 20,
+    cell_d_mm: 21,
+    cell_h_mm: 70
+}
+
+# Cell specifications (Samsung 50S as default)
+cell_spec = { 
+    cell_ir: 0.014,          # 14mΩ internal resistance
+    cell_mass: 0.072,        # kg
+    voltage: 4.2,            # V
+    cell_capacity: 5.0,      # Ah
+    spec_heat: 850,          # J/kg°C
+    thermal_cutoff: 80,      # °C
+    thermal_release: 60      # °C
+}
+
+def format_time(x, _=None):
+    """Convert minutes to appropriate units with smart formatting"""
+    if x < 60:
+        return f'{x*60:.0f}s'
+    elif x < (3600):
+        minutes = x / 60
+        return f'{minutes:.0f}min'
+    else:
+        hours = x/(3600)
+        if hours < 24:
+            return f'{hours:.1f}h'
+        else:
+            days = hours/24
+            return f'{days:.1f}d'
+
+def calculate_losses(total_current):
+    """Calculate losses for a given current"""
+    subs_dict = {**cell_spec, **pack_spec, **env_spec, current: total_current}
+    heat_per_cell = cell_power_loss.subs(subs_dict)
+    total_heat = pack_power_loss.subs(subs_dict)
+    eff = efficiency.subs(subs_dict)
+    temp_increase = temp_rise.subs(subs_dict)
+    time_to_cutoff = thermal_time.subs(subs_dict)
+    power = pack_power.subs(subs_dict)
+    voltage = pack_voltage.subs(subs_dict)
+    
+    
+    print(f"At {int(power)}W")
+    print(f"Total current: {total_current}A at {int(voltage)}V")
+    print(f"Current per cell: {total_current/battery_spec[n_parallel]:.2f}A")
+    print(f"Heat generation per cell: {heat_per_cell:.2f}W")
+    print(f"Pack efficiency: {eff:.2f}%")
+    print(f"Estimated temp rise above ambient: {temp_increase:.2f}°C")
+    print(f"Time to reach {cell_spec[thermal_cutoff]}°C (no cooling): {format_time(float(time_to_cutoff))}")
+    print("")
+
+    
+# Example usage with different currents
+for test_current in [50, 100, 150]:
+    calculate_losses(test_current)
+
+# To use different cell specs:
+# cell_spec.update(molicel_p42a_spec)
+# calculate_losses(90)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+At 4200W
+Total current: 50A at 84.0000000000000V
+Current per cell: 6.25A
+Heat generation per cell: 0.55W
+Pack efficiency: 97.92%
+Estimated temp rise above ambient: 10.30°C
+Time to reach 80°C (no cooling): 1.2h
+
+At 8400W
+Total current: 100A at 84.0000000000000V
+Current per cell: 12.50A
+Heat generation per cell: 2.19W
+Pack efficiency: 95.83%
+Estimated temp rise above ambient: 41.19°C
+Time to reach 80°C (no cooling): 19min
+
+At 12600W
+Total current: 150A at 84.0000000000000V
+Current per cell: 18.75A
+Heat generation per cell: 4.92W
+Pack efficiency: 93.75%
+Estimated temp rise above ambient: 92.68°C
+Time to reach 80°C (no cooling): 8min
+#+end_example
+
+#+BEGIN_SRC python :results file :session battcalc :exports both
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator, FuncFormatter, LogLocator
+
+# Setup plot style
+plt.style.use('dark_background')
+plt.rcParams['font.family'] = 'monospace'
+plt.rcParams['font.size'] = 15
+
+# Create figure with multiple subplots
+fig, (ax1, ax3) = plt.subplots(2, 1, figsize=(12, 14))
+ax2 = ax1.twinx()
+
+# Define current range (starting from small non-zero value)
+currents = np.linspace(40, 190, 100)
+
+# Create a substitution dictionary for all fixed parameters
+base_subs = {**cell_spec, **battery_spec, **env_spec}
+
+# Arrays to store results
+pack_losses_array = []
+efficiency_array = []
+time_to_80deg_array = []
+
+# Calculate values for each current
+for i in currents:
+    subs = {**base_subs, current: i}
+    
+    # Calculate using our SymPy expressions
+    pack_losses_array.append(float(pack_power_loss.subs(subs)))
+    efficiency_array.append(float(efficiency.subs(subs)))
+    time_to_80deg_array.append(float(thermal_time.subs(subs)))
+
+# Convert to numpy arrays for plotting
+pack_losses_array = np.array(pack_losses_array)
+efficiency_array = np.array(efficiency_array)
+time_to_80deg_array = np.array(time_to_80deg_array)
+
+# Plot power losses and efficiency
+line1 = ax1.plot(
+    currents, 
+    pack_losses_array,
+    linewidth=2,
+    label=f'{float(cell_spec[cell_ir])*1000:.1f}mΩ'
+)
+
+line2 = ax2.plot(
+    currents,
+    efficiency_array,
+    linewidth=2,
+    alpha=0.75,
+    linestyle='--',
+    color=line1[0].get_color()
+)
+
+# Plot time to reach thermal cutoff
+line3 = ax3.plot(
+    currents,
+    time_to_80deg_array,  # Convert to minutes
+    linewidth=2,
+    label=f'{float(cell_spec[cell_ir])*1000:.1f}mΩ'
+)
+
+# Configure top plot
+ax1.set_xlabel('Pack Current (A)')
+ax1.set_ylabel('Total Heat Generation (Watts)')
+ax2.set_ylabel('Pack Efficiency (%)', color='orange')
+
+ax1.axvline(x=150, color='red', linestyle='--', alpha=0.75, label='Max')
+ax1.axvline(x=100, color='orange', linestyle='--', alpha=0.75, label='High')
+ax1.axvline(x=50, color='green', linestyle='--', alpha=0.75, label='Normal')
+
+# Configure bottom plot
+ax3.set_xlabel('Pack Current (A)')
+ax3.set_ylabel('Time to reach 80°C (minutes)')
+ax3.set_yscale('log')  # Use log scale for time
+ax3.yaxis.set_major_formatter(FuncFormatter(format_time))
+ax3.yaxis.set_major_locator(LogLocator(base=1.1))
+
+# Add grids
+ax1.grid(True, which="major", ls="-", alpha=0.3)
+ax1.grid(True, which="minor", ls=":", alpha=0.2)
+ax3.grid(True, which="major", ls="-", alpha=0.3)
+ax3.grid(True, which="minor", ls=":", alpha=0.2)
+
+
+ax3.axvline(x=150, color='red', linestyle='--', alpha=0.75, label='Max')
+ax3.axvline(x=100, color='orange', linestyle='--', alpha=0.75, label='High')
+ax3.axvline(x=50, color='green', linestyle='--', alpha=0.75, label='Normal')
+
+# Set axis intervals
+ax1.xaxis.set_major_locator(MultipleLocator(10))
+ax1.yaxis.set_major_locator(MultipleLocator(200))
+ax3.xaxis.set_major_locator(MultipleLocator(20))
+
+# Add legends
+# legend1 = ax1.legend(title='Cell Internal Resistance', loc='upper right')
+# legend3 = ax3.legend(title='Cell Internal Resistance', loc='upper right')
+# frame1 = legend1.get_frame()
+# frame3 = legend3.get_frame()
+# frame1.set_facecolor('none')
+# frame1.set_facecolor((0, 0, 0.01, 0.5))
+# frame3.set_facecolor((0, 0, 0.01, 0.5))
+
+plt.tight_layout()
+
+# Save and return
+plt.savefig('battery_thermal.svg', dpi=150, bbox_inches='tight', format='svg', transparent=True)
+'battery_thermal.svg'
+#+END_SRC
+#+RESULTS:
+[[file:battery_thermal.svg]]
+
+These are for static air, this seems promising given I create airflow
+

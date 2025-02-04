@@ -1,0 +1,32 @@
+#+OPTIONS: \n:t
+#+TITLE: Ivan Nikolic
+#+SUBTITLE: Personal site
+#+LANGUAGE: en
+#+DATE: [2024-12-02 Mon]
+#+LAST_MODIFIED: [2024-12-21 Sat]
+#+VERSION: v0.1 alpha
+
+* Intro
+
+* Projects
+
+** Watering
+[[watering/][./watering/img/watering.webp]]
+
+indoors watering system, distributed sensor networks, data collection, nodemcu
+
+** Drone mapping, 3D reconstruction
+[[sunsim/][./sunsim/img/bg.jpg]]
+
+architecture, gis, 3d modeling, sattelite data
+
+** Livecoding A/V experiments
+[[visuals/][./visuals/img/s3d.jpg]]
+
+web, shaders, supercollider, midi
+
+** evehicle
+[[./evehicle/battery/][./evehicle/evehicle.jpg]]
+
+battery construction, cnc
+

@@ -1,0 +1,14 @@
+#+TITLE: 
+#+CREATED: [2024-12-28 Sat]
+#+LAST_MODIFIED: [2024-12-28 Sat]
+
+#+begin_src scadclj :results none :session=mysess.clj
+(def mycube (cube 10 10 10))
+#+end_src
+
+#+begin_src scadclj :file cube.png :results file link :exports both :axes t :session=mysess.clj
+mycube
+#+end_src
+
+#+RESULTS:
+[[file:cube.png]]

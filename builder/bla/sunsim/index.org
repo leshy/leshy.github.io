@@ -1,0 +1,78 @@
+#+OPTIONS: \n:t
+#+TITLE: Drone mapping & Sun coverage simulation
+#+LANGUAGE: en
+#+AUTHOR: Ivan Nikolic
+#+DATE: [2024-12-02 Mon]
+#+LAST_MODIFIED: [2024-12-21 Sat]
+#+VERSION: v0.1 alpha
+
+* Intro
+I'm building a house, which introduced me to gis and drone mapping so roughly documenting my process here.
+Goal of this has been get a 3d model of the land allowing for sunlight coverage simulation for architecture and solar panel placement.
+
+Click below to run the project in the browser, for some reason works great on mobile
+
+[[https://lsh.red/sunsim/][./img/three_double.png]]
+
+A bunch of geotagged photos from the air can be stitched together into a map. With higher frequency of photos 3d reconstruction of the terrain is possible. I'm working with around 100 photographs taken from 200 meters away of roughly 40.000 square meters of land.
+
+- For stitching photos into a map I had luck with [[https://www.opendronemap.org/][opendronemap]]
+- For 3d height map local photogrametry software like [[https://github.com/alicevision/Meshroom][Meshroom]] will do this, will require a GPU, might need a cleanup with something like [[https://www.meshlab.net/][MeshLab]]
+
+[[https://www.mapsmadeeasy.com/][Mapsmadeeasy service]] provides a simple service for both of the things above and it works great. While I did run local workflows eventually I decided that it's easier to offload this to a third party.
+
+** GIS processing
+
+I'm using [[https://qgis.org/download/][qgis]] for processing geo information and maps. LLMs turned out great for tips on how to do more complex operations there.
+
+High res drone photo map
+[[./img/map_drone2.jpg]]
+
+Elevation tiff created by mapsmadeeasy
+[[./img/map_heightmap2.jpg]]
+
+Topographic map for architects is easy once heightmap is available: `Raster` → `Extraction` → `Contour`
+
+[[./img/map_isolines2.jpg]]
+
+** 3D Reconstruction
+Tiff heightmap is just a 2D array, so it's easy to map it onto a 3d plane.
+I'm using [[https://geotiffjs.github.io/][GeoTIFF.js]] for tiff parsing and [[https://threejs.org/][three.js]] for rendering.
+
+[[./img/three_wireframe.png]]
+Can slap any texture on top, so I add a drone photo
+
+
+[[./img/three_dirshadow.png]]
+
+* Sun Sim
+Enable shadow mapping, add a bump map for fun, use [[https://github.com/mourner/suncalc][SunCalc]] library to calculate azimuth and height of sun for specific hour of the day
+
+[[./img/three_fullshadow.png]]
+
+
+* Recreating shadows from surrounding Mountains
+** Copernicus EEA-10 DEM
+
+EU Copernicus program publishes all [[https://dataspace.copernicus.eu/explore-data/data-collections][kinds of global geographical data]], including a EEA-10 dataset that's an EU wide elevation map of 10x10m resolution.
+
+All data is available online but a bit clunky to download, you'll need to register https://browser.dataspace.copernicus.eu/
+
+Data comes in some kind of sentinel2 jp2 format. You can convert this to tiff using [[https://gdal.org/][gdal]]
+
+#+begin_src sh
+apt-get install gdal-bin
+gdal_translate T34SGH_A040516_20230326T091116_B01.jp2 elevation.tif
+#+end_src
+
+[[./img/map_sentinel2.png]]
+
+** Merging meshes, final sim
+I'm interested in a high resolution image of the land with low resolution mountains, so I use two overlayed meshes with separate textures)
+[[./img/three_mesh_overlay.png]]
+
+I had to write some code to read the tiff coordinates and correctly translate those to opengl transformations so that I can import multiple tiffs and overlay them.
+
+
+[[./img/sun_global.png]]
+

@@ -1,0 +1,236 @@
+#+OPTIONS: \n:t
+#+TITLE: Auto Watering
+#+SUBTITLE: Individual Plant Pot
+#+LANGUAGE: en
+#+AUTHOR: Ivan Nikolic
+#+DATE: [2024-12-02 Mon]
+#+LAST_MODIFIED: [2024-12-20 Fri]
+#+VERSION: v0.1 alpha
+
+
+* Intro
+
+This document describes all elements of the pot.
+Every element here is optional.
+
+For example:
+- you can auto-water without measuring moisture
+- you can measure moisture without watering
+- you can have open drain pipe at the bottom of the pot or measure/water precisely enough for it not to be neccessary
+
+** Inputs/Outputs
+
+- IN 6mm pressurized water
+- IN 12V or 5V Power
+- OUT 12mm unpressurized water
+
+** Schematic
+
+#+BEGIN_SRC diagon :mode GraphDAG :exports results
+Power -> Moisture Sensor
+Water -> Nozzle
+Nozzle -> Plant
+Moisture Sensor -> Plant
+Plant -> Drain Water
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+┌─────┐┌───────────┐     
+│Power││Water      │     
+└┬────┘└──────────┬┘     
+┌▽──────────────┐┌▽─────┐
+│Moisture Sensor││Nozzle│
+└┬──────────────┘└┬─────┘
+┌▽────────────────▽┐     
+│Plant             │     
+└┬─────────────────┘     
+┌▽──────────┐            
+│Drain Water│            
+└───────────┘            
+
+#+end_example
+
+** Broader Context
+
+Pots are networked using central power/supply/drain pipeline
+
+#+begin_src dot :file img/schematic_overview.svg :cmdline -Kdot -Tsvg  :results file graphics :exports results 
+digraph {
+    rankdir=LR;
+    bgcolor=transparent;
+    node [shape=box fontname=monospace fontcolor=white color="#ffffffff" style="solid" margin=0.2 penwidth=2]
+    edge [color="#7777ffff" fillcolor="transparent" style="solid" penwidth=1]
+    nodesep=0.5;
+    ranksep=0.5;
+
+    PumpOrValve -> CorePipe
+    CorePipe -> Valve1, Valve2, Valve3
+
+    Valve1 -> Plant1
+    Valve2 -> Plant2
+    Valve3 -> Plant3
+
+    edge [color="#ffffffff" fillcolor="transparent" style="dashed"]
+
+    Controller1 -> Valve1
+    Controller2 -> Valve2
+    Controller3 -> Valve3
+
+    Controller1 -> Sensor1 -> Plant1
+    Controller2 -> Sensor2 -> Plant2
+    Controller3 -> Sensor3 -> Plant3
+}
+#+end_src
+
+#+RESULTS:
+[[file:img/schematic_overview.svg]]
+
+
+* Nozzle
+
+Any design will work here, stadard watering nozzles like gardena fit into 6mm hoses as well.
+
+[[./img/schematic-nozzle.png]]
+
+I just leave this in a pot, would be nice to design some spikes that hold this thing in the soil
+
+* Drainage
+If you have a moisture sensor you can ensure your pot never gets overwatered so you might not need a drain. I find pots with drainage more chill as you can safely overwater, but they are not chill to build.
+
+Goal here was to design an outlet that doesn't require a watertight seal since this is difficult and unreliable long term.
+
+[[./img/watering3.jpeg]]
+
+We use a bottom convex element to capture water flowing around the screw, though we expect the bulk of water to flow through it.
+
+[[./img/schematic-pot-drain.png]]
+
+
+** Elements
+#+BEGIN_SRC diagon :mode GraphDAG :exports results
+Soil Filter -> In-pot element
+In-pot element -> Bottom convex element
+Bottom convex element -> 12mm push in fitting
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+┌───────────┐          
+│Soil Filter│          
+└┬──────────┘          
+┌▽─────────────┐       
+│In-pot element│       
+└┬─────────────┘       
+┌▽────────────────────┐
+│Bottom convex element│
+└┬────────────────────┘
+┌▽───────────────────┐ 
+│12mm push in fitting│ 
+└────────────────────┘ 
+
+#+end_example
+
+
+** Soil filter
+Prevents large chunks of soil from entering the outlet tube.
+
+This is probably annoying to print for most people and a random rock, fine netting, a sponge etc is ok for this as well.
+
+** In-pot element
+Gives you a screw on the other side. You can adjust a height of this according to your pot bottom thickness
+
+I sometimes print this in full size and break it off to size after fitting.
+
+If your pot bottom is especially coarse you want to add sillicone where it connects to the pot to limit the flow, (you won't prevent it, especially long term, but this is what bottom element is made to capture)
+
+** Bottom convex element
+Captures water that might leak from the sides of the screw. Provides a connection for a push-in fitting.
+
+*** print settings
+
+- 4 walls
+- Random Z-seam alignment
+- Supports.
+
+  
+* Drainage Pressurization Module
+
+** Description
+This module detects water in the dumping container and engages the pump to pressurize it so that it can be moved to drainage
+
+Control box takes power input, sensor input and provides pump output
+
+Pump control circuit used will depend on the pump voltage and power, relays will always work, something like TIP120 is great for DC > 5A pumps
+
+Sensor circuit depends on your sensor [[https://www.dfrobot.com/product-1493.html][this one is really nice]] but float switches, load cells etc will work just as well.
+
+** Schematic
+
+#+BEGIN_SRC diagon :mode GraphDAG :exports results
+unpressurized_drain -> container -> pump -> pressurized_drain
+sensor -> controller -> pump
+power -> controller
+container -> sensor
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+┌───────────────────┐┌─────┐
+│unpressurized_drain││power│
+└┬──────────────────┘└┬────┘
+┌▽────────┐           │     
+│container│           │     
+└┬─┬──────┘           │     
+ │┌▽─────┐            │     
+ ││sensor│            │     
+ │└┬─────┘            │     
+ │┌▽──────────────────▽┐    
+ ││controller          │    
+ │└┬───────────────────┘    
+┌▽─▽─┐                      
+│pump│                      
+└┬───┘                      
+┌▽────────────────┐         
+│pressurized_drain│         
+└─────────────────┘         
+
+#+end_example
+
+
+#+BEGIN_SRC diagon :mode GraphDAG :exports none
+pot_drain -> container -> pump -> main_drain
+container -> sensor
+controller -> sensor
+controller -> pump
+#+END_SRC
+#+RESULTS:
+#+begin_example
+┌─────────┐┌──────────┐
+│pot_drain││controller│
+└┬────────┘└┬┬────────┘
+┌▽────────┐ ││         
+│container│ ││         
+└───┬────┬┘ ││         
+    │    │ ┌│┘         
+   ┌│────│─│┘          
+┌──▽▽┐┌──▽─▽─┐         
+│pump││sensor│         
+└┬───┘└──────┘         
+┌▽─────────┐           
+│main_drain│           
+└──────────┘           
+
+#+end_example
+
+
+
+** Image
+[[./img/pump.jpeg]]
+
+
+** Inputs/Outputs
+
+- IN 12mm water (unpressurized)
+- IN power
+- OUT 12mm water (pressurized)

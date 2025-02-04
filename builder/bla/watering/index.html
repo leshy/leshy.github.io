@@ -1,0 +1,255 @@
+<!doctype html>
+<html
+  xmlns="http://www.w3.org/1999/xhtml"
+  lang=""
+  xml:lang=""
+  >
+  <head>
+    <meta charset="utf-8" />
+    <meta name="generator" content="pandoc" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=yes"
+    />
+        <meta name="author" content="Ivan Nikolic" />
+           <title>Auto Watering</title>
+        <link rel="stylesheet" href="/reset.css" />
+        <link rel="stylesheet" href="/index.css" />
+      
+  </head>
+  <body>
+    
+    <table class="header">
+      <tr>
+        <td colspan="2" rowspan="2" class="width-auto">
+          <h1 class="title">Auto Watering</h1>
+          <span class="subtitle">Individual Plant Pot</span>
+        </td>
+        <th>Version</th>
+        <td class="width-min">v0.1 alpha</td>
+      </tr>
+      <tr>
+        <th>Created</th>
+        <td class="width-min">
+          <time style="white-space: pre">[2024-12-02 Mon]</time>
+        </td>
+      </tr>
+      <tr>
+        <th class="width-min">Author</th>
+        <td class="width-auto">
+          <a href=""><cite>Ivan Nikolic</cite></a>
+        </td>
+        <th class="width-min">Updated</th>
+        <td>[2024-12-02 Mon]</td>
+      </tr>
+    </table>
+    <label class="debug-toggle-label"
+      ><input type="checkbox" class="debug-toggle" /> Debug mode</label
+    >
+         <nav id="TOC" role="doc-toc">
+            <h2 id="toctitle">Contents</h2>
+
+       <ul>
+<li><a href="#intro" id="toc-intro">Intro</a>
+<ul>
+<li><a href="#inputsoutputs"
+id="toc-inputsoutputs">Inputs/Outputs</a></li>
+<li><a href="#schematic" id="toc-schematic">Schematic</a></li>
+<li><a href="#broader-context" id="toc-broader-context">Broader
+Context</a></li>
+</ul></li>
+<li><a href="#nozzle" id="toc-nozzle">Nozzle</a></li>
+<li><a href="#drainage" id="toc-drainage">Drainage</a>
+<ul>
+<li><a href="#elements" id="toc-elements">Elements</a></li>
+<li><a href="#soil-filter" id="toc-soil-filter">Soil filter</a></li>
+<li><a href="#in-pot-element" id="toc-in-pot-element">In-pot
+element</a></li>
+<li><a href="#bottom-convex-element"
+id="toc-bottom-convex-element">Bottom convex element</a></li>
+</ul></li>
+<li><a href="#drainage-pressurization-module"
+id="toc-drainage-pressurization-module">Drainage Pressurization
+Module</a>
+<ul>
+<li><a href="#description" id="toc-description">Description</a></li>
+<li><a href="#schematic-1" id="toc-schematic-1">Schematic</a></li>
+<li><a href="#image" id="toc-image">Image</a></li>
+<li><a href="#inputsoutputs-1"
+id="toc-inputsoutputs-1">Inputs/Outputs</a></li>
+</ul></li>
+</ul>
+    </nav>
+     <section id="intro" class="level1">
+<h1>Intro</h1>
+<p>This document describes all elements of the pot.<br />
+Every element here is optional.</p>
+<p>For example:</p>
+<ul>
+<li>you can auto-water without measuring moisture<br />
+</li>
+<li>you can measure moisture without watering<br />
+</li>
+<li>you can have open drain pipe at the bottom of the pot or
+measure/water precisely enough for it not to be neccessary</li>
+</ul>
+<section id="inputsoutputs" class="level2">
+<h2>Inputs/Outputs</h2>
+<ul>
+<li>IN 6mm pressurized water<br />
+</li>
+<li>IN 12V or 5V Power<br />
+</li>
+<li>OUT 12mm unpressurized water</li>
+</ul>
+</section>
+<section id="schematic" class="level2">
+<h2>Schematic</h2>
+<figure><pre>┌─────┐┌───────────┐     
+│Power││Water      │     
+└┬────┘└──────────┬┘     
+┌▽──────────────┐┌▽─────┐
+│Moisture Sensor││Nozzle│
+└┬──────────────┘└┬─────┘
+┌▽────────────────▽┐     
+│Plant             │     
+└┬─────────────────┘     
+┌▽──────────┐            
+│Drain Water│            
+└───────────┘            
+
+</pre></figure>
+</section>
+<section id="broader-context" class="level2">
+<h2>Broader Context</h2>
+<p>Pots are networked using central power/supply/drain pipeline</p>
+<p><img src="img/schematic_overview.svg" /></p>
+</section>
+</section>
+<section id="nozzle" class="level1">
+<h1>Nozzle</h1>
+<p>Any design will work here, stadard watering nozzles like gardena fit
+into 6mm hoses as well.</p>
+<p><img src="./img/schematic-nozzle.jpg" /></p>
+<p>I just leave this in a pot, would be nice to design some spikes that
+hold this thing in the soil</p>
+</section>
+<section id="drainage" class="level1">
+<h1>Drainage</h1>
+<p>If you have a moisture sensor you can ensure your pot never gets
+overwatered so you might not need a drain. I find pots with drainage
+more chill as you can safely overwater, but they are not chill to
+build.</p>
+<p>Goal here was to design an outlet that doesn't require a watertight
+seal since this is difficult and unreliable long term.</p>
+<p><img src="./img/watering3.jpg" /></p>
+<p>We use a bottom convex element to capture water flowing around the
+screw, though we expect the bulk of water to flow through it.</p>
+<p><img src="./img/schematic-pot-drain.jpg" /></p>
+<section id="elements" class="level2">
+<h2>Elements</h2>
+<figure><pre>┌───────────┐          
+│Soil Filter│          
+└┬──────────┘          
+┌▽─────────────┐       
+│In-pot element│       
+└┬─────────────┘       
+┌▽────────────────────┐
+│Bottom convex element│
+└┬────────────────────┘
+┌▽───────────────────┐ 
+│12mm push in fitting│ 
+└────────────────────┘ 
+
+</pre></figure>
+</section>
+<section id="soil-filter" class="level2">
+<h2>Soil filter</h2>
+<p>Prevents large chunks of soil from entering the outlet tube.</p>
+<p>This is probably annoying to print for most people and a random rock,
+fine netting, a sponge etc is ok for this as well.</p>
+</section>
+<section id="in-pot-element" class="level2">
+<h2>In-pot element</h2>
+<p>Gives you a screw on the other side. You can adjust a height of this
+according to your pot bottom thickness</p>
+<p>I sometimes print this in full size and break it off to size after
+fitting.</p>
+<p>If your pot bottom is especially coarse you want to add sillicone
+where it connects to the pot to limit the flow, (you won't prevent it,
+especially long term, but this is what bottom element is made to
+capture)</p>
+</section>
+<section id="bottom-convex-element" class="level2">
+<h2>Bottom convex element</h2>
+<p>Captures water that might leak from the sides of the screw. Provides
+a connection for a push-in fitting.</p>
+<section id="print-settings" class="level3">
+<h3>print settings</h3>
+<ul>
+<li>4 walls<br />
+</li>
+<li>Random Z-seam alignment<br />
+</li>
+<li>Supports.</li>
+</ul>
+</section>
+</section>
+</section>
+<section id="drainage-pressurization-module" class="level1">
+<h1>Drainage Pressurization Module</h1>
+<section id="description" class="level2">
+<h2>Description</h2>
+<p>This module detects water in the dumping container and engages the
+pump to pressurize it so that it can be moved to drainage</p>
+<p>Control box takes power input, sensor input and provides pump
+output</p>
+<p>Pump control circuit used will depend on the pump voltage and power,
+relays will always work, something like TIP120 is great for DC &gt; 5A
+pumps</p>
+<p>Sensor circuit depends on your sensor <a
+href="https://www.dfrobot.com/product-1493.html">this one is really
+nice</a> but float switches, load cells etc will work just as well.</p>
+</section>
+<section id="schematic-1" class="level2">
+<h2>Schematic</h2>
+<figure><pre>┌───────────────────┐┌─────┐
+│unpressurized_drain││power│
+└┬──────────────────┘└┬────┘
+┌▽────────┐           │     
+│container│           │     
+└┬─┬──────┘           │     
+ │┌▽─────┐            │     
+ ││sensor│            │     
+ │└┬─────┘            │     
+ │┌▽──────────────────▽┐    
+ ││controller          │    
+ │└┬───────────────────┘    
+┌▽─▽─┐                      
+│pump│                      
+└┬───┘                      
+┌▽────────────────┐         
+│pressurized_drain│         
+└─────────────────┘         
+
+</pre></figure>
+</section>
+<section id="image" class="level2">
+<h2>Image</h2>
+<p><img src="./img/pump.jpg" /></p>
+</section>
+<section id="inputsoutputs-1" class="level2">
+<h2>Inputs/Outputs</h2>
+<ul>
+<li>IN 12mm water (unpressurized)<br />
+</li>
+<li>IN power<br />
+</li>
+<li>OUT 12mm water (pressurized)</li>
+</ul>
+</section>
+</section> 
+    <div class="debug-grid"></div>
+    <script src="/index.js"></script>
+  </body>
+</html>

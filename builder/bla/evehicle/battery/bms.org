@@ -1,0 +1,6 @@
+#+TITLE: 
+#+CREATED: [2025-01-07 Tue]
+#+LAST_MODIFIED: [2025-01-07 Tue]
+#+TITLE: Battery Design
+#+SUBTITLE: BMS
+

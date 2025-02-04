@@ -1,0 +1,263 @@
+#+TITLE: 
+#+CREATED: [2025-01-01 Wed]
+#+LAST_MODIFIED: [2025-01-01 Wed]
+
+
+* Cell Structure
+
+How are we positioning cells? we have 20S8P
+
+** 2 Bus bars
+#+BEGIN_SRC diagon :mode GraphDAG :exports results
+S0P1 -> S0P5 -> S1P1 -> S1P5
+S0P2 -> S0P6 -> S1P2 -> S1P6
+S0P3 -> S0P7 -> S1P3 -> S1P7
+S0P4 -> S0P8 -> S1P4 -> S1P8
+#+END_SRC
+
+#+begin_example
+        ┇            ┇
+  ┌────┐┇┌────┐┌────┐┇┌────┐
+  │S0P1│┇│S0P2││S0P3│┇│S0P4│
+  └┬───┘┇└┬───┘└┬───┘┇└┬───┘
+  ┌▽───┐┇┌▽───┐┌▽───┐┇┌▽───┐
+  │S0P5│┇│S0P6││S0P7│┇│S0P8│
+  └────┘┇└────┘└────┘┇└────┘
+ .......┇............┇.......
+  ┌────┐┇┌────┐┌────┐┇┌────┐
+  │S1P1│┇│S1P2││S1P3│┇│S1P4│
+  └┬───┘┇└┬───┘└┬───┘┇└┬───┘
+  ┌▽───┐┇┌▽───┐┌▽───┐┇┌▽───┐
+  │S1P5│┇│S1P6││S1P7│┇│S1P8│
+  └────┘┇└────┘└────┘┇└────┘
+        ┇            ┇
+
+       75A          75A
+#+end_example
+
+Two bus bars between parallel elements, which means each bar needs to carry 75A.
+with 2-3/mm2 capacity it needs 25-40 mm2 cross section which means 20x2mm bar?
+
+** 3 Bus bars
+#+begin_example
+        ┇      ┇      ┇
+  ┌────┐┇┌────┐┇┌────┐┇┌────┐
+  │S0P1│┇│S0P2│┇│S0P3│┇│S0P4│
+  └┬───┘┇└┬───┘┇└┬───┘┇└┬───┘
+  ┌▽───┐┇┌▽───┐┇┌▽───┐┇┌▽───┐
+  │S0P5│┇│S0P6│┇│S0P7│┇│S0P8│
+  └────┘┇└────┘┇└────┘┇└────┘
+ .......┇......┇......┇.......
+  ┌────┐┇┌────┐┇┌────┐┇┌────┐
+  │S1P1│┇│S1P2│┇│S1P3│┇│S1P4│
+  └┬───┘┇└┬───┘┇└┬───┘┇└┬───┘
+  ┌▽───┐┇┌▽───┐┇┌▽───┐┇┌▽───┐
+  │S1P5│┇│S1P6│┇│S1P7│┇│S1P8│
+  └────┘┇└────┘┇└────┘┇└────┘
+        ┇      ┇      ┇
+        
+       56A    38A    56A
+#+end_example
+
+Three bus bars need 50A each. again 20x2mm seems like minimum for structural stability.
+Can use this to sandwich the cells together.
+
+A bit scarry since individual screws connect negative and positive terminals (investigate plastic screws?)
+
+** Inter Cell Connections
+we need to re-do the calculations for the nickel
+
+#+begin_example
+┌─────┐ ┌─────┐ 
+│CELL1│ │CELL5│ 
+└┬────┘ └┬────┘
+ │18.75A │18.75A
+┌▽───────▽───────────┐
+│       BUS1         |  56A ─▷
+└△───────△───────────┘
+ │9.37A  │9.37A
+┌┴────┐ ┌┴────┐ 
+│CELL6│ │CELL2│ 
+└┬────┘ └┬────┘
+ │9.37A  │9.37A
+┌▽───────▽───────────┐
+│       BUS2         |  38A ─▷
+└△───────△───────────┘
+ │9.37A  │9.37A
+┌┴────┐ ┌┴────┐ 
+│CELL7│ │CELL3│ 
+└┬────┘ └┬────┘
+ │ 9.37A │9.37A
+┌▽───────▽───────────┐
+│       BUS3         |  56A ─▷
+└△───────△───────────┘ 
+ │18.75A │18.75A
+┌┴────┐ ┌┴────┐ 
+│CELL4│ │CELL8│ 
+└─────┘ └─────┘ 
+
+#+end_example
+
+** Loss/temp table for bus bars
+#+BEGIN_SRC python :results table :exports both :session battcalc :results table :post header(*this*)
+import numpy as np
+
+values = {
+    **material_copper,
+    current: 56, # 150 / 8
+    voltage: 84,
+    temperature: 60,
+    length: 0.12,
+ }
+
+def round_row(*row):
+    return [ f"{item:.2f}" for item in row]
+
+headers = ["mm²", "A/mm²", "Diam (mm)", "Loss (W)", "Loss (%)", "ΔT (°C)"]
+rows = []
+for area in np.linspace(10, 60, 6):
+    vals = compute(
+        { **values, area_mm2: area },
+        [ current_density, diameter_mm, power_loss, power_loss_percent, delta_t ])
+
+    rows.append(round_row(area, *vals))
+
+# Return formatted table
+[headers, *rows]
+#+END_SRC
+#+RESULTS:
+|   mm² | A/mm² | Diam (mm) | Loss (W) | Loss (%) | ΔT (°C) |
+| 10.00 |  5.60 |      3.57 |     0.73 |     0.02 |  108.77 |
+| 20.00 |  2.80 |      5.05 |     0.37 |     0.01 |   38.46 |
+| 30.00 |  1.87 |      6.18 |     0.24 |     0.01 |   20.93 |
+| 40.00 |  1.40 |      7.14 |     0.18 |     0.00 |   13.60 |
+| 50.00 |  1.12 |      7.98 |     0.15 |     0.00 |    9.73 |
+| 60.00 |  0.93 |      8.74 |     0.12 |     0.00 |    7.40 |
+
+* Initial Model
+** 2S8P
+Modelling two parallel blocks with 20x3 mm bus bars
+
+_turns out openscad is not sustainable, wrote a cli for [[https://github.com/leshy/scad-clj-cli][clojure -> openscad compiler]] so starting from scratch_
+
+#+begin_src openscad :file single_series.png :results file link :exports both :axes t
+cell_height = 70.7;
+cell_r = 10.625;
+cell_d = cell_r * 2;
+cell_distance = 5;
+
+parallel_yn = 2;
+parallel_xn = 4;
+
+bus_bar_x = 20;
+bus_bar_z = 3;
+
+module_distance = 15;
+
+series_yn = 5;
+series_xn = 4;
+
+parallel_module_x = (cell_d + cell_distance) * (parallel_xn);
+parallel_module_y = (cell_d + cell_distance) * (parallel_yn);
+
+echo("parallel_module_x", parallel_module_x);
+echo("parallel_module_y", parallel_module_y);
+
+module cell() {
+   cylinder (h=cell_height, r=cell_r, center=true);
+   translate ([0,0,(cell_height/2) +1 ]) {
+     cylinder (h=2, r=5, center=true);
+   }
+}
+
+module center(x,y,z) {
+  translate([-x/2, -y/2, -z/2]) { children(); }
+}
+
+module colorize(n, total) {
+   color(hue_to_rgb(n/total)) children();
+}
+
+// Where hue_to_rgb is the function from before:
+function hue_to_rgb(h) = 
+   (h * 6 < 1) ? [1, h*6, 0] : 
+   (h * 6 < 2) ? [2-h*6, 1, 0] : 
+   (h * 6 < 3) ? [0, 1, h*6-2] : 
+   (h * 6 < 4) ? [0, 4-h*6, 1] : 
+   (h * 6 < 5) ? [h*6-4, 0, 1] : 
+                 [1, 0, 6-h*6];
+
+module spread(xn, yn, xdist, ydist, colorize_arg) {
+  total = xn * yn;
+  n = 0;
+
+  union() {
+      for ( ypos = [0:1:yn-1]) {
+        for ( xpos = [0:1:xn-1]) {
+          translate ([xpos * xdist, ypos * ydist, 0]) {
+            if (colorize_arg == undef) { children(); } else
+            {
+              n = (xpos + 1) + (ypos * xn);
+              echo(n, total, xpos, ypos);
+              colorize(n, total) children();
+            }
+          }
+        }
+     }
+  }
+}
+
+
+module parallel_module() {
+  spread(parallel_xn, parallel_yn, cell_distance + cell_d, cell_distance + cell_d) {
+    cell();
+  }
+}
+
+module series_module() {
+  spread(series_xn, series_yn,
+    (parallel_module_x) + module_distance,
+    (parallel_module_y) + module_distance)
+  {
+    parallel_module();
+  }
+}
+
+
+module bus_bar() {
+bus_bar_y = (parallel_module_y * 2) + module_distance;
+translate([0,0,0])
+  color([184/170, 115/170, 51/170], 0.5)
+  cube([bus_bar_x, bus_bar_y, bus_bar_z], true);
+}
+
+module series_pair() {
+   color([115/170, 184/170, 115/170], 0.5)
+   parallel_module();
+   translate([0, (parallel_module_x + module_distance) / 2, 0]) mirror([0,0,1]) color([115/170, 184/170, 115/170], 0.5) parallel_module();
+   translate([(cell_d + cell_distance) / 2, (parallel_module_y - module_distance /2), (cell_height / 2) + + 2])
+   spread(3, 1, cell_distance + cell_d, 0) {
+     bus_bar();
+   }
+}
+
+translate([(-parallel_module_x / 2) + cell_d - cell_distance, -parallel_module_y + (module_distance /2), 0]) series_pair();
+
+//color([115/170, 184/170, 115/170], 0.5)
+//spread(series_xn, series_yn, parallel_module_x + module_distance, parallel_module_y + module_distance )
+//parallel_module();
+#+end_src
+#+RESULTS:
+[[file:single_series.png]]
+
+** Unified bus bar?
+Actually from this it seems that a totally flat copper plate is better then bus bars, with potentially holes for cell level fusing.
+
+Covering the tops without protruding around the cells would make the plate 80mm wide, 80x2mm makes a bar that causes almost no heating at 150A
+
+Some pros seem to have reached the same conclusions:
+
+[[./img/pro-battery.png]]
+
+_Note that here bus bar is not in contact with actual cells, likely to eliminate vibration of the plate damaging battery insulation? depends on general approach to construction, seems like a good idea_
+

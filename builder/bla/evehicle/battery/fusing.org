@@ -1,0 +1,25 @@
+#+OPTIONS: \n:t
+#+TITLE: Battery Fusing
+#+LANGUAGE: en
+#+AUTHOR: Ivan Nikolic
+#+DATE: [2024-12-24 Tue]
+#+LAST_MODIFIED: [2024-12-24 Tue]
+
+* Air Quality Sensor
+https://endless-sphere.com/sphere/threads/voc-sensor-for-detecting-electrolyte-leakage-before-its-too-late.96838/
+
+
+* Fusing
+do we require it?
+check UN38.3 standard
+
+check how often do cells short
+
+
+Fuse balance leads
+(self resetting fuse?)
+
+
+Quality control of fuses!
+
+
