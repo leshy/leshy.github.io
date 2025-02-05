@@ -2,7 +2,7 @@ name: Deploy static site
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [build_application]
+    types: [rebuild_web]
   push:
     branches: [main]
 
