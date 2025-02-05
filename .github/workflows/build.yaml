@@ -1,7 +1,11 @@
 name: Deploy static site
 on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [build_application]
   push:
     branches: [main]
+
 permissions:
   contents: read
   pages: write
