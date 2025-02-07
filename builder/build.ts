@@ -203,6 +203,7 @@ if (args.serve) {
     console.log("Server enabled.")
     if (args.watch) {
         gulp.watch(glob(args.src), rebuild)
+        gulp.watch(glob(staticDir), rebuild)
     }
     await serve(
         (req) =>

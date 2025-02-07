@@ -11,7 +11,7 @@ svg {
   --text-color-alt: #aaa;
   --text-color-p: #ccc;
   --background-color: #000;
-  --background-color-alt: #111;
+  --background-color-alt: #141d22;
 
   --font-family: "JetBrains Mono", monospace;
   --line-height: 1.2rem;
@@ -151,7 +151,7 @@ body {
   width: 100%;
   margin: 0;
   padding: var(--line-height) 2ch;
-  max-width: calc(min(80ch, round(down, 100%, 1ch)));
+  max-width: calc(min(100ch, round(down, 100%, 1ch)));
   line-height: var(--line-height);
   overflow-x: hidden;
 }
@@ -269,7 +269,8 @@ table {
 
 th,
 td {
-  border: var(--border-thickness) solid var(--text-color);
+  border: var(--border-thickness) solid var(--color-blue);
+  background-color: var(--background-color-alt);
   padding: calc((var(--line-height) / 2))
     calc(1ch - var(--border-thickness) / 2)
     calc((var(--line-height) / 2) - (var(--border-thickness)));
@@ -296,7 +297,7 @@ th {
 }
 
 tr.header {
-  color: var(--color-lightblue);
+  color: var(--color-green);
 }
 
 .header h1 {
@@ -327,7 +328,7 @@ img {
 
 details {
   /* background-color: var(--color-bgblue); */
-  /* border: var(--border-thickness) dashed var(--color-blue); */
+  border: var(--border-thickness) dashed var(--color-blue);
   padding: calc(var(--line-height) - var(--border-thickness)) 1ch;
   margin-bottom: var(--line-height);
 }
@@ -794,7 +795,7 @@ code span.ss {
   color: var(--color-lightblue);
 } /* SpecialString */
 code span.st {
-  color: var(--color-lightblue);
+  color: var(--color-orange);
 } /* String */
 code span.va {
   color: val(--color-orange);
