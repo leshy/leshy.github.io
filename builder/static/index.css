@@ -838,5 +838,5 @@ svg .green {
 }
 
 svg .blue {
-  fill: var(--color-blue);
+  fill: var(--color-lightblue);
 }
