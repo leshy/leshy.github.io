@@ -2,16 +2,26 @@
 svg {
   --color-red: #fd5548;
   --color-green: #73e3bb;
-  --color-blue: #469ecc;
+  --color-blue: #555;
   --color-lightblue: #adf7f6;
   --color-orange: #ffa500;
   --color-bgblue: #141d22;
 
+
+  
+  /* --color-red: #fd5548; */
+  /* --color-green: #73e3bb; */
+  /* --color-blue: #469ecc; */
+  /* --color-lightblue: #adf7f6; */
+  /* --color-orange: #ffa500; */
+  /* --color-bgblue: #141d22; */
+
+  
   --text-color: #fff;
   --text-color-alt: #aaa;
   --text-color-p: #ccc;
   --background-color: #000;
-  --background-color-alt: #141d22;
+  --background-color-alt: #111;
 
   --font-family: "JetBrains Mono", monospace;
   --line-height: 1.2rem;
@@ -133,7 +143,7 @@ a:hover:has(> img)::before {
 
 * + * {
   margin-top: var(--line-height);
-}
+z}
 
 html {
   display: flex;
@@ -328,7 +338,7 @@ img {
 
 details {
   /* background-color: var(--color-bgblue); */
-  border: var(--border-thickness) dashed var(--color-blue);
+  /* border: var(--border-thickness) dashed var(--color-blue); */
   padding: calc(var(--line-height) - var(--border-thickness)) 1ch;
   margin-bottom: var(--line-height);
 }
