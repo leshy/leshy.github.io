@@ -41,6 +41,20 @@ svg {
   width: 100%;
 }
 
+.header {
+top: -2px;
+}
+
+.topimg {
+height: 200px;
+width: 100%;
+border: 1px solid var(--color-blue);
+background-position: center center;
+margin: 0;
+}
+
+
+
 a:has(> img) {
   position: relative;
   display: inline-block; /* Establish stacking context for ::before */
