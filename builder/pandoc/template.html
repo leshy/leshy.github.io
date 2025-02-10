@@ -25,7 +25,7 @@
     $endif$
     <title>$if(title-prefix)$$title-prefix$ – $endif$$pagetitle$</title>
     $for(css)$
-    <link rel="stylesheet" href="/$css$" />
+    <link type="text/css" rel="stylesheet" href="/css/$css$" />
     $endfor$ $for(header-includes)$ $header-includes$ $endfor$ $if(math)$ $math$
     $endif$
   </head>
@@ -74,6 +74,6 @@
     </nav>
     $endif$ $body$ $for(include-after)$ $include-after$ $endfor$
     <div class="debug-grid"></div>
-    <script src="/index.js"></script>
+    <script src="/js/index.js"></script>
   </body>
 </html>
