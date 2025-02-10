@@ -198,17 +198,25 @@ const rebuild = async () => {
 
 await rebuild()
 
+async function change() {
+    console.log("CHANGE")
+    Deno.exit(1)
+}
+
+async function watch() {
+    console.log("Watch mode enabled.", contentDir)
+    await gulp.watch(orgGlob, change)
+    await gulp.watch(glob(staticDir), change)
+    await gulp.watch(glob(pandocDir), change)
+    await gulp.watch(miscContentGlob, change)
+}
+
 if (args.watch) {
-    console.log("Watch mode enabled.")
-    gulp.watch(glob(args.src), rebuild)
+    await watch()
 }
 
 if (args.serve) {
     console.log("Server enabled.")
-    if (args.watch) {
-        gulp.watch(glob(args.src), rebuild)
-        gulp.watch(glob(staticDir), rebuild)
-    }
     await serve(
         (req) =>
             serveDir(req, {

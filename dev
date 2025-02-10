@@ -1,1 +1,7 @@
-deno run -A builder/build.ts --src content --dest www --watch --serve
+rundev()
+{
+    deno run -A builder/build.ts --src content --dest www --watch --serve
+    rundev
+}
+
+rundev

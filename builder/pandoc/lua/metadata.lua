@@ -1,3 +1,12 @@
+function split_string(str, delimiter)
+    local result = {}
+    for match in (str .. delimiter):gmatch("(.-)" .. delimiter) do
+        -- Trim leading and trailing spaces and add to result
+        table.insert(result, match:match("^%s*(.-)%s*$"))
+    end
+    return result
+end
+
 local function debug(msg)
     io.stderr:write("DEBUG: " .. msg .. "\n")
     io.stderr:flush()
@@ -25,7 +34,11 @@ function Pandoc(doc)
     -- Merge found metadata with existing metadata
     for k, v in pairs(metadata) do
         if not doc.meta[k] then
-            doc.meta[k] = v
+            if k == "tags" then
+                doc.meta[k] = pandoc.List(split_string(v, ","))
+            else
+                doc.meta[k] = v
+            end
             -- debug("Added metadata to document: " .. k .. " = " .. v)
         end
     end

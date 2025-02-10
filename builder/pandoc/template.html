@@ -14,6 +14,8 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, user-scalable=yes"
     />
+
+    
     $for(author-meta)$
     <meta name="author" content="$author-meta$" />
     $endfor$ $if(date-meta)$
@@ -36,7 +38,7 @@
 
     <div class="topimg" style="background-image: url('$topimg$');"></div>
 
-    $endif$
+    $endif$ 
 
     
     <table class="header">
@@ -55,10 +57,18 @@
         </td>
       </tr>
       <tr>
-        <th class="width-min">Author</th>
+        $if(tags)$
+        <th class="width-min">Tags</th>
         <td class="width-auto">
-          <a href="/"><cite>$author$</cite></a>
+          $for(tags)$
+          <a href="/tag/$tags$">$tags$</a> 
+          $endfor$
         </td>
+        $else$
+        <th class="width-min"></th>
+        <td class="width-auto"></td>
+        $endif$
+        
         <th class="width-min">Updated</th>
         <td>$last_modified$</td>
       </tr>
