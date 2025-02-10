@@ -169,6 +169,7 @@ const taskOrg = () =>
                     `--lua-filter=${pandocDir}/lua/code-block.lua`,
                     `--lua-filter=${pandocDir}/lua/images.lua`,
                     `--lua-filter=${pandocDir}/lua/icon.lua`,
+                    `--lua-filter=${pandocDir}/lua/metadata.lua`,
                     "--css",
                     "reset.css",
                     "--css",

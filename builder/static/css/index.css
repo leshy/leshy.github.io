@@ -61,7 +61,6 @@ a:has(> img)::before {
     calc(1ch - var(--border-thickness) / 2)
     calc((var(--line-height) / 2) - (var(--border-thickness)));
   border: var(--border-thickness) solid var(--text-color);
-
   z-index: 1; /* Ensure pseudo-element is above the image */
   opacity: 0;
   pointer-events: none;
@@ -69,6 +68,12 @@ a:has(> img)::before {
 a:hover:has(> img)::before {
   opacity: 1;
 }
+
+a:hover {
+  color: var(--color-orange) !important;
+}
+
+
 
 @font-face {
   font-family: "JetBrains Mono";
