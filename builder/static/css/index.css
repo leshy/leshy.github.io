@@ -41,6 +41,11 @@ svg {
   width: 100%;
 }
 
+
+time {
+  color: var(--color-lightblue);
+}
+
 .header {
 top: -2px;
 }
@@ -863,4 +868,5 @@ svg .blue {
 time {
 white-space: nowrap;
 }
+
 
