@@ -39,7 +39,7 @@ function Pandoc(doc)
             else
                 doc.meta[k] = v
             end
-            -- debug("Added metadata to document: " .. k .. " = " .. v)
+            --debug("Added metadata to document: " .. k .. " = " .. v)
         end
     end
     

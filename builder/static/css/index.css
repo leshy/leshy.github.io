@@ -859,3 +859,8 @@ svg .green {
 svg .blue {
   fill: var(--color-lightblue);
 }
+
+time {
+white-space: nowrap;
+}
+

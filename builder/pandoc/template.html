@@ -47,31 +47,29 @@
           <h1 class="title">$title$</h1>
           <span class="subtitle">$subtitle$</span>
         </td>
-        <th>Version</th>
-        <td class="width-min">$version$</td>
-      </tr>
-      <tr>
+        
         <th>Created</th>
-        <td class="width-min">
-          <time style="white-space: pre">$date$</time>
-        </td>
+        <td class="width-min"><time datetime="$created$">$created$</time></td>
+        
       </tr>
       <tr>
-        $if(tags)$
+        <th>Updated</th>
+        <td class="width-min"><time datetime="$modified$">$modified$</time></td>
+      </tr>
+      
+      $if(tags)$
+      <tr>
         <th class="width-min">Tags</th>
         <td class="width-auto">
           $for(tags)$
           <a href="/tag/$tags$">$tags$</a> 
           $endfor$
         </td>
-        $else$
-        <th class="width-min"></th>
-        <td class="width-auto"></td>
-        $endif$
-        
-        <th class="width-min">Updated</th>
-        <td>$last_modified$</td>
+           <th class="width-min">License</th>
+           <td>MIT</td>
       </tr>
+      $endif$
+      
     </table>
     <label class="debug-toggle-label">
     <input type="checkbox" class="debug-toggle" /> Debug mode</label>
