@@ -151,6 +151,43 @@ const taskContent = () =>
         .pipe(filelog("misc content"))
         .pipe(gulp.dest(destDir))
 
+const taskOrgAll = () =>
+    gulp
+        .src(glob(orgGlob))
+        .pipe(filelog("pandoc"))
+        .pipe(
+            pandoc({
+                from: "org",
+                to: "html5",
+                ext: ".html",
+                args: [
+                    "--toc",
+                    "--toc-depth=2",
+                    "-s",
+                    "--section-divs=true",
+                    `--lua-filter=${pandocDir}/lua/code-block.lua`,
+                    `--lua-filter=${pandocDir}/lua/images.lua`,
+                    `--lua-filter=${pandocDir}/lua/icon.lua`,
+                    `--lua-filter=${pandocDir}/lua/metadata.lua`,
+                    `--lua-filter=${pandocDir}/lua/time.lua`,
+                    "--css",
+                    "reset.css",
+                    "--css",
+                    "index.css",
+                    //"--css",
+                    //"font-awesome.min.css",
+                    //"--quiet",
+                    `--template=${pandocDir}/template.html`,
+                ],
+            }),
+        )
+        .on("error", function (err: Error) {
+            console.error(`Error processing file ${err}`)
+            // @ts-ignore
+            this.emit("end")
+        })
+        .pipe(gulp.dest(destDir))
+
 const taskOrg = () =>
     gulp
         .src(glob(orgGlob))
@@ -177,7 +214,7 @@ const taskOrg = () =>
                     "index.css",
                     //"--css",
                     //"font-awesome.min.css",
-                    //"--quiet",
+                    "--quiet",
                     `--template=${pandocDir}/template.html`,
                 ],
             }),
